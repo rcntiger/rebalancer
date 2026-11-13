@@ -403,7 +403,7 @@ const ACCENTS=[{n:'블루',h:'#4A90D9'},{n:'그린',h:'#2ECC7A'},{n:'퍼플',h:'
   {n:'오렌지',h:'#E8A020'},{n:'레드',h:'#E85555'},{n:'티파니',h:'#1EC8C8'}];
 const AC=['#4A90D9','#2ECC7A','#E8A020','#C06AF0','#E85555','#00BCD4','#FF6B9D','#8BC34A','#FF9800','#9C27B0'];
 const BROKERS=['한국투자증권','삼성증권','키움증권','미래에셋증권','NH투자증권','신한투자증권','KB증권','대신증권','기타'];
-const APP_VERSION='2.3.0';
+const APP_VERSION='2.3.1';
 const KIS='http://localhost:5000';
 
 /* ── 색상 헬퍼 ──────────────────────────────────────────────
@@ -2311,29 +2311,49 @@ function showProxyBanner(ok, msg, launch = false) {
   }
 }
 
+// 앱·프록시 버전은 앞 두 자리(2.3)만 맞으면 호환 — 앱만 고친 패치(2.3.x)에 프록시 재빌드 불필요
+function verCompatible(a, b) { return !!a && !!b && a.split('.').slice(0, 2).join('.') === b.split('.').slice(0, 2).join('.'); }
+
+// 연결 실패 원인 구분
+//  'old'     : 프록시는 떠 있는데 이 주소를 허용하지 않음 (구버전 프록시)
+//  'blocked' : 크롬이 로컬 네트워크 접근을 차단함
+//  'off'     : 프록시가 꺼져 있음
+async function diagnoseProxy() {
+  try {
+    // no-cors 요청은 CORS 허용 여부와 상관없이, 서버가 응답하기만 하면 성공
+    await fetch(`${KIS}/health`, { mode: 'no-cors', signal: AbortSignal.timeout(1500) });
+    return 'old';
+  } catch (e) { /* 서버 응답 없음 또는 브라우저 차단 */ }
+  try {
+    const p = await navigator.permissions.query({ name: 'local-network-access' });
+    if (p.state === 'denied') return 'blocked';
+  } catch (e) { /* 이 권한을 모르는 브라우저 */ }
+  return 'off';
+}
+
 async function checkProxy(silent = false) {
   try {
     const r = await fetch(`${KIS}/health`, { signal: AbortSignal.timeout(2000) });
     if (r.ok) {
       try { _proxyVer = (await r.json()).version || ''; } catch (e) { _proxyVer = ''; }
-      if (_proxyVer !== APP_VERSION) {
-        showProxyBanner(false, `프록시 버전(${_proxyVer ? 'v' + _proxyVer : '구버전'})이 앱(v${APP_VERSION})과 다릅니다 — 새 kis_proxy.py로 교체하세요`);
-        _proxyOk = true;
+      const wasOk = _proxyOk;
+      _proxyOk = true;
+      if (!verCompatible(_proxyVer, APP_VERSION)) {
+        showProxyBanner(false, `프록시 업데이트 필요 — 실행 중 v${_proxyVer || '?'}, 필요 v${APP_VERSION.split('.').slice(0, 2).join('.')}.x (새 kis_proxy.py로 exe 다시 빌드)`);
         return true;
       }
-      if (!_proxyOk || !silent) showProxyBanner(true, `프록시 서버 연결됨 (v${_proxyVer}) — KIS API 시세 조회 가능합니다`);
-      _proxyOk = true;
+      if (!wasOk || !silent) showProxyBanner(true, `프록시 서버 연결됨 (v${_proxyVer}) — KIS API 시세 조회 가능합니다`);
       return true;
     }
-  } catch (e) { /* 연결 실패 */ }
+  } catch (e) { /* 아래에서 원인 진단 */ }
   _proxyOk = false;
-  if (!silent) {
-    showProxyBanner(false,
-      '프록시 서버가 꺼져 있습니다.', true);
+  const why = await diagnoseProxy();
+  if (why === 'old') {
+    showProxyBanner(false, `프록시 업데이트 필요 — 실행 중인 프록시가 이 주소(${location.origin === 'null' ? '로컬 파일' : location.host})를 허용하지 않습니다. 기존 프록시를 끄고 새 kis_proxy.py로 exe를 다시 빌드하세요`);
+  } else if (why === 'blocked') {
+    showProxyBanner(false, '브라우저가 로컬 네트워크 접근을 차단했습니다 — 주소창 왼쪽 아이콘 → 사이트 설정에서 "로컬 네트워크"를 허용 후 새로고침');
   } else {
-    // silent 모드에서도 오프라인이면 배너 유지
-    showProxyBanner(false,
-      '프록시 서버 오프라인 (포트 5000)', true);
+    showProxyBanner(false, '프록시 서버가 꺼져 있습니다 (포트 5000)', true);
   }
   return false;
 }
