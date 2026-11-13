@@ -297,7 +297,7 @@ html,body{height:100%;font-family:var(--sans);background:var(--bg);color:var(--t
 <div id="app-shell">
   <!-- 앱바 -->
   <div id="appbar">
-    <h1>📊 리밸런서 <span id="app-ver" style="font-size:12px;font-weight:500;color:var(--t3);font-family:var(--mono)"></span></h1>
+    <h1>📊 리밸런서 <span id="app-ver" style="font-size:12px;font-weight:500;color:var(--t3);font-family:var(--mono)"></span><span id="cloud-badge" style="font-size:13px;margin-left:6px" title=""></span></h1>
     <div class="spacer"></div>
     <div class="icon-btn" id="btn-refresh" onclick="refreshPrices()" title="시세 갱신">↻</div>
     <div class="icon-btn" onclick="openFontSheet()" title="글자 크기" style="margin-left:4px" id="btn-font">
@@ -395,6 +395,7 @@ html,body{height:100%;font-family:var(--sans);background:var(--bg);color:var(--t
 #scroll-area{position:relative;overflow-y:auto;flex:1;}
 </style>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 'use strict';
 
@@ -403,7 +404,8 @@ const ACCENTS=[{n:'블루',h:'#4A90D9'},{n:'그린',h:'#2ECC7A'},{n:'퍼플',h:'
   {n:'오렌지',h:'#E8A020'},{n:'레드',h:'#E85555'},{n:'티파니',h:'#1EC8C8'}];
 const AC=['#4A90D9','#2ECC7A','#E8A020','#C06AF0','#E85555','#00BCD4','#FF6B9D','#8BC34A','#FF9800','#9C27B0'];
 const BROKERS=['한국투자증권','삼성증권','키움증권','미래에셋증권','NH투자증권','신한투자증권','KB증권','대신증권','기타'];
-const APP_VERSION='2.3.1';
+const APP_VERSION='2.4.0';
+const PROXY_MIN='2.3.0';   // 앱이 요구하는 최소 프록시 버전
 const KIS='http://localhost:5000';
 
 /* ── 색상 헬퍼 ──────────────────────────────────────────────
@@ -477,6 +479,7 @@ function save(){
   localStorage.setItem('rb2_accs',JSON.stringify(S.accounts));
   localStorage.setItem('rb2_rate',S.rate);
   if(S.updated)localStorage.setItem('rb2_upd',S.updated);
+  cloudMarkDirty();
 }
 function load(){
   try{
@@ -1513,6 +1516,7 @@ function saveSnapshot(){
   const keys=Object.keys(hist).sort();
   while(keys.length>730){delete hist[keys.shift()];}
   localStorage.setItem('rb2_history',JSON.stringify(hist));
+  cloudMarkDirty();
 }
 
 function getHistory(){
@@ -2016,6 +2020,7 @@ function renderSettingsContent(){
   const saved=S.keySaved,em=S.editMode;
   const canEdit=saved&&!em,showSave=!saved||em;
   document.getElementById('settings-content').innerHTML=`
+    ${cloudBoxHtml()}
     <div class="status-banner ${saved?'banner-saved':'banner-unsaved'}">
       ${saved?'🔐 API 키가 PIN으로 암호화 저장되어 있습니다':'⚠ API 키가 저장되지 않았습니다'}
     </div>
@@ -2312,7 +2317,13 @@ function showProxyBanner(ok, msg, launch = false) {
 }
 
 // 앱·프록시 버전은 앞 두 자리(2.3)만 맞으면 호환 — 앱만 고친 패치(2.3.x)에 프록시 재빌드 불필요
-function verCompatible(a, b) { return !!a && !!b && a.split('.').slice(0, 2).join('.') === b.split('.').slice(0, 2).join('.'); }
+// 버전 a 가 b 이상인지 (예: verGte('2.3.0','2.3.0') → true)
+function verGte(a, b) {
+  if (!a) return false;
+  const x = a.split('.').map(Number), y = b.split('.').map(Number);
+  for (let i = 0; i < 3; i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0); }
+  return true;
+}
 
 // 연결 실패 원인 구분
 //  'old'     : 프록시는 떠 있는데 이 주소를 허용하지 않음 (구버전 프록시)
@@ -2338,8 +2349,8 @@ async function checkProxy(silent = false) {
       try { _proxyVer = (await r.json()).version || ''; } catch (e) { _proxyVer = ''; }
       const wasOk = _proxyOk;
       _proxyOk = true;
-      if (!verCompatible(_proxyVer, APP_VERSION)) {
-        showProxyBanner(false, `프록시 업데이트 필요 — 실행 중 v${_proxyVer || '?'}, 필요 v${APP_VERSION.split('.').slice(0, 2).join('.')}.x (새 kis_proxy.py로 exe 다시 빌드)`);
+      if (!verGte(_proxyVer, PROXY_MIN)) {
+        showProxyBanner(false, `프록시 업데이트 필요 — 실행 중 v${_proxyVer || '?'}, 필요 v${PROXY_MIN} 이상 (새 kis_proxy.py로 exe 다시 빌드)`);
         return true;
       }
       if (!wasOk || !silent) showProxyBanner(true, `프록시 서버 연결됨 (v${_proxyVer}) — KIS API 시세 조회 가능합니다`);
@@ -2374,12 +2385,191 @@ window.refreshPrices = async function() {
   return _doRefreshPrices();
 };
 
+/* ════════════════════════ 클라우드 동기화 (Supabase) ════════════════════════ */
+// 계좌·종목·목표비중·자산추이를 이메일 계정에 저장해 기기 간 공유 (6자리 코드 로그인)
+// KIS API 키는 올리지 않음 (이 기기에 PIN 암호화로만 보관)
+var SB_URL = 'https://rcwneqlwzfplvrihvzyu.supabase.co';
+var SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJjd25lcWx3emZwbHZyaWh2enl1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTEyNjg4ODAsImV4cCI6MjEwNjg0NDg4MH0.StdImJfoPxzTQ2-Ys2_U9BG8mf71n1NVfMr8WKVa8zI';
+var SB_TABLE = 'rebalancer_data';
+var sb = window.supabase ? window.supabase.createClient(SB_URL, SB_KEY) : null;
+var _otpEmail = '';   // 코드를 보낸 이메일 (코드 입력 단계 표시용)
+var _cloudUser = null, _cloudTimer = null, _cloudApplying = false, _cloudBusy = false;
+var _cloudState = 'off', _cloudMsg = '';   // off | saving | saved | error
+
+function setCloudState(st, msg) {
+  _cloudState = st; _cloudMsg = msg || '';
+  const b = document.getElementById('cloud-badge');
+  if (b) {
+    const map = { saving: ['☁', 'var(--accent)', '동기화 중'], saved: ['☁', 'var(--buy)', '동기화됨'], error: ['☁', 'var(--sell)', '동기화 오류'] };
+    const m = map[st];
+    b.textContent = m ? m[0] : '';
+    b.style.color = m ? m[1] : '';
+    b.title = m ? m[2] + (msg ? ': ' + msg : '') : '';
+  }
+  const t = document.getElementById('cloud-status');
+  if (t) t.textContent = cloudStatusText();
+}
+function cloudStatusText() {
+  const ts = localStorage.getItem('rb2_cloud_ts');
+  if (_cloudState === 'saving') return '동기화 중…';
+  if (_cloudState === 'error') return '오류: ' + _cloudMsg;
+  if (_cloudState === 'saved') return '동기화됨' + (ts ? ' · ' + ft(ts) : '');
+  return '';
+}
+
+// 로컬 데이터가 바뀌면 2초 뒤 서버로 올림 (연속 수정은 한 번에)
+function cloudMarkDirty() {
+  if (_cloudApplying) return;
+  try { localStorage.setItem('rb2_dirty', '1'); } catch (e) {}
+  if (!sb || !_cloudUser) return;
+  clearTimeout(_cloudTimer);
+  _cloudTimer = setTimeout(cloudPush, 2000);
+}
+
+async function cloudPush() {
+  if (!sb || !_cloudUser) return;
+  clearTimeout(_cloudTimer); _cloudTimer = null;
+  setCloudState('saving');
+  const now = new Date().toISOString();
+  const { error } = await sb.from(SB_TABLE).upsert({
+    user_id: _cloudUser.id, accounts: S.accounts, history: getHistory(), updated_at: now,
+  });
+  if (error) { setCloudState('error', error.message); return; }
+  localStorage.setItem('rb2_cloud_ts', now);
+  localStorage.removeItem('rb2_dirty');
+  setCloudState('saved');
+}
+
+// 서버 데이터 확인 → 서버가 새것이면 받아오고, 이 기기만 바뀌었으면 올림
+async function cloudPull() {
+  if (!sb || !_cloudUser || _cloudBusy) return;
+  if (_cloudTimer) { await cloudPush(); return; }      // 올릴 게 대기 중이면 먼저 올림
+  _cloudBusy = true;
+  try {
+    setCloudState('saving');
+    const { data, error } = await sb.from(SB_TABLE)
+      .select('accounts,history,updated_at').eq('user_id', _cloudUser.id).maybeSingle();
+    if (error) { setCloudState('error', error.message); return; }
+    const lastSynced = localStorage.getItem('rb2_cloud_ts') || '';
+    // 한 번도 동기화 안 한 기기에 데이터가 있으면 "동기화 안 된 변경"으로 취급
+    const dirty = localStorage.getItem('rb2_dirty') === '1' || (!lastSynced && S.accounts.length > 0);
+    if (!data) {                                    // 서버가 비어 있음 → 이 기기 데이터로 시작
+      if (S.accounts.length) await cloudPush(); else setCloudState('saved');
+      return;
+    }
+    if (data.updated_at === lastSynced) {           // 서버는 그대로
+      if (dirty) await cloudPush(); else setCloudState('saved');
+      return;
+    }
+    // 서버가 다른 기기에서 바뀜
+    if (dirty && !confirm('이 기기에 서버와 다른 데이터가 있습니다.\n\n[확인] 서버 데이터로 바꾸기\n[취소] 이 기기 데이터를 서버에 올리기')) {
+      await cloudPush();
+      return;
+    }
+    cloudApply(data);
+  } finally { _cloudBusy = false; }
+}
+
+function cloudApply(data) {
+  _cloudApplying = true;
+  try {
+    S.accounts = sanitizeAccounts(Array.isArray(data.accounts) ? data.accounts : []);
+    localStorage.setItem('rb2_history', JSON.stringify(data.history || {}));
+    save();
+  } finally { _cloudApplying = false; }
+  localStorage.setItem('rb2_cloud_ts', data.updated_at);
+  localStorage.removeItem('rb2_dirty');
+  if (S.selAcc >= S.accounts.length) S.selAcc = 0;
+  if (S.detailIdx >= 0) { if (S.detailIdx < S.accounts.length) renderDetailContent(S.detailIdx); else closeDetail(); }
+  render();
+  setCloudState('saved');
+}
+
+// 1단계: 이메일로 로그인 코드 보내기
+async function cloudSendCode() {
+  if (!sb) return;
+  const email = (document.getElementById('cloud-email')?.value || '').trim();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { alert('이메일 주소를 확인하세요'); return; }
+  const btn = document.getElementById('cloud-send-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '보내는 중…'; }
+  const { error } = await sb.auth.signInWithOtp({ email, options: { shouldCreateUser: true } });
+  if (error) {
+    if (btn) { btn.disabled = false; btn.textContent = '코드 받기'; }
+    alert('코드 전송 실패: ' + error.message);
+    return;
+  }
+  try { localStorage.setItem('rb2_cloud_email', email); } catch (e) {}
+  _otpEmail = email;
+  renderSettingsContent();
+  setTimeout(() => document.getElementById('cloud-code')?.focus(), 50);
+}
+// 2단계: 메일로 받은 코드 확인
+async function cloudVerifyCode() {
+  if (!sb || !_otpEmail) return;
+  const token = (document.getElementById('cloud-code')?.value || '').replace(/\D/g, '');
+  if (token.length < 6) { alert('메일로 받은 숫자 코드를 입력하세요'); return; }
+  const btn = document.getElementById('cloud-verify-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '확인 중…'; }
+  const { error } = await sb.auth.verifyOtp({ email: _otpEmail, token, type: 'email' });
+  if (error) {
+    if (btn) { btn.disabled = false; btn.textContent = '로그인'; }
+    alert('코드가 맞지 않거나 만료되었습니다. 다시 받아 주세요.\n(' + error.message + ')');
+    return;
+  }
+  _otpEmail = '';   // 이후는 onAuthStateChange 가 처리 (동기화 + 화면 갱신)
+}
+function cloudResetCode() { _otpEmail = ''; renderSettingsContent(); }
+async function cloudLogout() {
+  if (!confirm('로그아웃할까요?\n이 기기의 데이터는 그대로 남고, 자동 동기화만 멈춥니다.')) return;
+  await sb.auth.signOut();
+}
+async function cloudSyncNow() { await cloudPull(); }
+
+function cloudBoxHtml() {
+  const box = (inner) => `<div style="margin:12px 12px 4px;padding:12px 14px;border:1px solid var(--bd);border-radius:10px;background:var(--s1)">
+    <div style="font-size:var(--f-sm);font-weight:700;margin-bottom:8px">☁ 클라우드 동기화</div>${inner}</div>`;
+  const btn = (label, fn, primary) => `<button onclick="${fn}" style="padding:9px 14px;border-radius:9px;cursor:pointer;font-size:var(--f-sm);font-weight:600;
+    border:1px solid ${primary ? 'var(--accent)' : 'var(--bd)'};background:${primary ? 'var(--accent)' : 'var(--s2)'};color:${primary ? '#fff' : 'var(--t1)'}">${label}</button>`;
+  const inp = (id, type, ph, val, extra) => `<input id="${id}" type="${type}" placeholder="${ph}" value="${val}" ${extra || ''}
+    style="flex:1;min-width:0;padding:9px 11px;border-radius:9px;border:1px solid var(--bd);background:var(--bg);color:var(--t1);font-size:var(--f-sm)">`;
+  if (!sb) return box(`<div style="font-size:var(--f-xs);color:var(--t3)">동기화 모듈을 불러오지 못했습니다. 인터넷 연결을 확인하세요.</div>`);
+  if (!_cloudUser && !_otpEmail) {
+    let last = ''; try { last = clean(localStorage.getItem('rb2_cloud_email') || ''); } catch (e) {}
+    return box(`<div style="font-size:var(--f-xs);color:var(--t2);margin-bottom:10px">이메일로 로그인하면 계좌·종목·자산추이가 모든 기기에서 같게 유지됩니다. (API 키는 올라가지 않음)</div>
+    <div style="display:flex;gap:8px">${inp('cloud-email', 'email', '이메일 주소', last, 'autocomplete="email" onkeydown="if(event.key===\'Enter\')cloudSendCode()"')}
+    <button id="cloud-send-btn" onclick="cloudSendCode()" style="padding:9px 14px;border-radius:9px;cursor:pointer;font-size:var(--f-sm);font-weight:600;border:1px solid var(--accent);background:var(--accent);color:#fff;white-space:nowrap">코드 받기</button></div>`);
+  }
+  if (!_cloudUser) return box(`<div style="font-size:var(--f-xs);color:var(--t2);margin-bottom:10px">${clean(_otpEmail)} 로 보낸 숫자 코드를 입력하세요. (스팸함도 확인)</div>
+    <div style="display:flex;gap:8px">${inp('cloud-code', 'text', '숫자 코드', '', 'inputmode="numeric" autocomplete="one-time-code" maxlength="10" onkeydown="if(event.key===\'Enter\')cloudVerifyCode()"')}
+    <button id="cloud-verify-btn" onclick="cloudVerifyCode()" style="padding:9px 14px;border-radius:9px;cursor:pointer;font-size:var(--f-sm);font-weight:600;border:1px solid var(--accent);background:var(--accent);color:#fff;white-space:nowrap">로그인</button></div>
+    <div style="margin-top:8px"><span onclick="cloudResetCode()" style="font-size:var(--f-xs);color:var(--t3);cursor:pointer;text-decoration:underline">다른 이메일 / 코드 다시 받기</span></div>`);
+  return box(`<div style="font-size:var(--f-xs);color:var(--t2)">${clean(_cloudUser.email || '')}</div>
+    <div id="cloud-status" style="font-size:var(--f-xs);color:var(--t3);margin:4px 0 10px">${cloudStatusText()}</div>
+    <div style="display:flex;gap:8px">${btn('↻ 지금 동기화', 'cloudSyncNow()', false)}${btn('로그아웃', 'cloudLogout()', false)}</div>`);
+}
+
+function initCloud() {
+  if (!sb) return;
+  sb.auth.onAuthStateChange((ev, session) => {
+    const u = session?.user || null;
+    const changed = (u?.id || null) !== (_cloudUser?.id || null);
+    _cloudUser = u;
+    if (!u) { clearTimeout(_cloudTimer); _cloudTimer = null; setCloudState('off'); }
+    // 콜백 안에서 바로 supabase 호출하면 멈출 수 있어 다음 틱으로 미룸
+    if (u && changed) setTimeout(cloudPull, 0);
+    if (changed && document.getElementById('settings-panel').classList.contains('open')) renderSettingsContent();
+  });
+  // 다른 기기에서 바꾼 내용: 이 탭으로 돌아올 때 확인
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && _cloudUser) cloudPull(); });
+}
+
 /* ════════════════════════ 초기화 ════════════════════════ */
 load();applyTheme();render();
 // 앱 시작 시 Yahoo 시장 데이터 자동 조회 (프록시 연결 시)
 setTimeout(refreshMarketData, 1000);
 startProxyPoll();
 document.getElementById('app-ver').textContent='v'+APP_VERSION;
+initCloud();
 </script>
 </body>
 </html>
