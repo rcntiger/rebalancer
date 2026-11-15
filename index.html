@@ -516,7 +516,17 @@ const ACCENTS=[{n:'블루',h:'#4A90D9'},{n:'그린',h:'#2ECC7A'},{n:'퍼플',h:'
   {n:'오렌지',h:'#E8A020'},{n:'레드',h:'#E85555'},{n:'티파니',h:'#1EC8C8'}];
 const AC=['#4A90D9','#2ECC7A','#E8A020','#C06AF0','#E85555','#00BCD4','#FF6B9D','#8BC34A','#FF9800','#9C27B0'];
 const BROKERS=['한국투자증권','삼성증권','키움증권','미래에셋증권','NH투자증권','나무증권','신한투자증권','KB증권','대신증권','기타'];
-const APP_VERSION='2.15.0';
+const APP_VERSION='2.16.0';
+// ── 계좌 순서 바꾸기 ──
+let _accOrd=false;
+function toggleAccOrder(){_accOrd=!_accOrd;renderDash();}
+function moveAcc(i,d){
+  const j=i+d;if(j<0||j>=S.accounts.length)return;
+  const a=S.accounts;[a[i],a[j]]=[a[j],a[i]];
+  for(const k in _dnSel)delete _dnSel[k];save();renderDash();
+  // 옮긴 줄이 화면에서 벗어나지 않게
+  requestAnimationFrame(()=>document.getElementById('ord-'+j)?.scrollIntoView({block:'nearest',behavior:'smooth'}));
+}
 // 증권사 목록 = 기본 목록 + 계좌에 직접 입력해 쓰고 있는 증권사 ('기타'는 맨 끝)
 function brokerList(){
   const base=BROKERS.filter(b=>b!=='기타');
@@ -1382,8 +1392,22 @@ function renderDash(){
           <span style="color:var(--t3)">›</span></div>`).join('')}
       </div>`;
     }
-    h+=`<div class="sec-lbl">계좌 목록</div>`;
-    S.accounts.forEach((acc,i)=>{
+    h+=`<div class="sec-lbl" style="display:flex;align-items:center;justify-content:space-between;gap:8px">계좌 목록
+      ${S.accounts.length>1?`<button onclick="toggleAccOrder()" style="padding:5px 12px;border-radius:999px;border:1px solid ${_accOrd?'var(--accent)':'var(--bd)'};background:${_accOrd?'color-mix(in srgb,var(--accent) 15%,transparent)':'var(--s2)'};color:${_accOrd?'var(--accent)':'var(--t2)'};font-size:var(--f-xs);font-weight:600;cursor:pointer;letter-spacing:0;text-transform:none">${_accOrd?'✓ 완료':'⇅ 순서'}</button>`:''}</div>`;
+    if(_accOrd){
+      const ob='width:calc(40px * var(--fs));height:calc(36px * var(--fs));border-radius:9px;border:1px solid var(--bd);background:var(--s2);color:var(--t1);font-size:var(--f-sm);cursor:pointer';
+      h+=`<div style="display:flex;flex-direction:column;gap:8px">${S.accounts.map((acc,i)=>`
+        <div id="ord-${i}" class="acc-card" style="padding:10px 12px;display:flex;align-items:center;gap:10px;cursor:default">
+          <span style="font-family:var(--mono);color:var(--t3);font-size:var(--f-xs);min-width:1.6em">${i+1}</span>
+          <div class="acc-dot" style="background:${AC[acc.ci%5]}"></div>
+          <div style="flex:1;min-width:0"><div class="acc-name nm2" style="margin:0;padding:0">${esc(acc.name)}</div>
+            <div style="font-size:max(10px, calc(12px * var(--fs)));color:var(--t3)">${esc(acc.broker)} · ${acc.market}</div></div>
+          <button onclick="moveAcc(${i},-1)" ${i===0?'disabled style="'+ob+';opacity:.3"':`style="${ob}"`} title="위로">▲</button>
+          <button onclick="moveAcc(${i},1)" ${i===S.accounts.length-1?'disabled style="'+ob+';opacity:.3"':`style="${ob}"`} title="아래로">▼</button>
+        </div>`).join('')}</div>
+        <div style="font-size:max(10px, calc(12px * var(--fs)));color:var(--t3);text-align:center;margin-top:10px">▲▼로 옮긴 순서는 바로 저장되고 다른 기기에도 동기화됩니다</div>`;
+    }
+    if(!_accOrd)S.accounts.forEach((acc,i)=>{
       const v=accVal(acc),color=AC[acc.ci%5],dv=devCnt(acc);
       const tot2=acc.stocks.reduce((s,st)=>s+(st.quantity||0)*(st.price||0),0);
       const _anyLoaded=acc.stocks.some(s=>s.loaded);
