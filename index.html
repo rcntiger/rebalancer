@@ -482,8 +482,19 @@ html,body{height:100%;font-family:var(--sans);background:var(--bg);color:var(--t
 const ACCENTS=[{n:'블루',h:'#4A90D9'},{n:'그린',h:'#2ECC7A'},{n:'퍼플',h:'#C06AF0'},
   {n:'오렌지',h:'#E8A020'},{n:'레드',h:'#E85555'},{n:'티파니',h:'#1EC8C8'}];
 const AC=['#4A90D9','#2ECC7A','#E8A020','#C06AF0','#E85555','#00BCD4','#FF6B9D','#8BC34A','#FF9800','#9C27B0'];
-const BROKERS=['한국투자증권','삼성증권','키움증권','미래에셋증권','NH투자증권','신한투자증권','KB증권','대신증권','기타'];
-const APP_VERSION='2.12.0';
+const BROKERS=['한국투자증권','삼성증권','키움증권','미래에셋증권','NH투자증권','나무증권','신한투자증권','KB증권','대신증권','기타'];
+const APP_VERSION='2.13.0';
+// 증권사 목록 = 기본 목록 + 계좌에 직접 입력해 쓰고 있는 증권사 ('기타'는 맨 끝)
+function brokerList(){
+  const base=BROKERS.filter(b=>b!=='기타');
+  const used=[...new Set(S.accounts.map(a=>a.broker).filter(b=>b&&!BROKERS.includes(b)))];
+  return[...base,...used,'기타'];
+}
+function brokerSel(v){
+  const box=document.getElementById('f-ab-new');
+  box.style.display=v==='__new'?'block':'none';
+  if(v==='__new')setTimeout(()=>document.getElementById('f-ab2').focus(),0);
+}
 const PROXY_MIN='2.3.0';   // 앱이 요구하는 최소 프록시 버전
 const KIS='http://localhost:5000';
 
@@ -1312,7 +1323,7 @@ function renderDash(){
                 return yt!=null?`<div class="ai-pf" style="font-size:calc(15px * var(--fs));color:var(--t2)">연초 ${pctSpan(yt)}</div>`:'';})()}
               <div style="display:flex;flex-direction:column;gap:3px">
                 <span class="ai-sub" style="font-size:calc(17px * var(--fs));color:var(--t2)">${acc.stocks.length}종목</span>
-                <span class="ai-sub" style="font-size:calc(17px * var(--fs));color:var(--t2)">${acc.broker}</span>
+                <span class="ai-sub" style="font-size:calc(17px * var(--fs));color:var(--t2)">${esc(acc.broker)}</span>
               </div>
               <div style="margin-top:2px">
                 ${acc.noReb?`<span class="tag" style="font-size:calc(17px * var(--fs));background:var(--s2);border:1px solid var(--bd);color:var(--t2)">📋 보유관리</span>`
@@ -1539,7 +1550,7 @@ function renderDetailContent(idx){
 
   let h=`
   <div class="detail-header" style="background:linear-gradient(135deg,${color}1F,var(--s1) 65%);border:1px solid ${color}40">
-    <div style="font-size:var(--f-xs);color:var(--t2)">${acc.broker} · ${acc.market}</div>
+    <div style="font-size:var(--f-xs);color:var(--t2)">${esc(acc.broker)} · ${acc.market}</div>
     <div style="font-family:var(--mono);font-size:var(--f-2xl);font-weight:500;margin:4px 0">${acc.market==='KRX'?fn(v)+'원':'$'+fn(v,2)}</div>
     ${acc.market==='US'&&vk?`<div style="font-size:var(--f-xs);color:var(--t2)">≈ ${fn(vk)}원</div>`:''}
     ${acc.memo?`<div style="font-size:var(--f-xs);color:var(--t3);margin-top:5px">${acc.memo}</div>`:''}
@@ -1917,7 +1928,7 @@ function renderRebBody(){
   h+=`<div id="reb-result-wrap"></div>
   <div class="broker-card">
     <span style="font-size:calc(19px * var(--fs))">🏦</span>
-    <div style="flex:1"><div style="font-size:var(--f-sm);font-weight:600">${acc.broker}</div>
+    <div style="flex:1"><div style="font-size:var(--f-sm);font-weight:600">${esc(acc.broker)}</div>
       <div style="font-size:var(--f-xs);color:var(--t2)">증권사 앱에서 직접 매매하세요</div></div>
     <span style="color:var(--t3)">›</span>
   </div>`;
@@ -2135,7 +2146,7 @@ function renderChart(){
       <div style="width:10px;height:10px;border-radius:50%;background:${c};flex-shrink:0"></div>
       <div style="flex:1">
         <div style="font-size:calc(17px * var(--fs))">${a.name}</div>
-        <div style="font-size:calc(15px * var(--fs));color:var(--t3)">${a.broker} · ${a.market}</div>
+        <div style="font-size:calc(15px * var(--fs));color:var(--t3)">${esc(a.broker)} · ${a.market}</div>
       </div>
       <div style="font-family:var(--mono);font-size:var(--f-sm);font-weight:600;color:${c}">${displayVal>0?fn(displayVal)+'원':'-'}</div>
       ${S.chartAccFilter===a.name?`<div style="color:var(--accent);font-size:max(10px, calc(11px * var(--fs)))">◀</div>`:''}
@@ -2320,7 +2331,8 @@ function openAccSheet(editIdx){
       </div>
     </div>
     <div class="field"><label>계좌 이름</label><input id="f-an" value="${acc?.name??''}" placeholder="예: KRX-배당주"></div>
-    <div class="field"><label>증권사</label><select id="f-ab">${BROKERS.map(b=>`<option${(acc?.broker??BROKERS[0])===b?' selected':''}>${b}</option>`).join('')}</select></div>
+    <div class="field"><label>증권사</label><select id="f-ab" onchange="brokerSel(this.value)">${brokerList().map(b=>`<option${(acc?.broker??BROKERS[0])===b?' selected':''}>${esc(b)}</option>`).join('')}<option value="__new">＋ 직접 입력…</option></select>
+      <div id="f-ab-new" style="display:none;margin-top:6px"><input id="f-ab2" maxlength="20" placeholder="증권사 이름 (예: 토스증권)"></div></div>
     <label style="display:flex;align-items:flex-start;gap:10px;margin:0 2px 13px;cursor:pointer">
       <input type="checkbox" id="f-areb" ${acc?.noReb?'':'checked'} style="width:18px;height:18px;margin-top:2px;flex-shrink:0;accent-color:var(--accent)">
       <span><span style="font-size:var(--f-sm);font-weight:600">리밸런싱 사용</span><br>
@@ -2359,7 +2371,8 @@ function selMkt(m){
 function saveAcc(){
   const name=document.getElementById('f-an').value.trim();
   if(!name){alert('계좌 이름을 입력하세요');return;}
-  const broker=document.getElementById('f-ab').value;
+  let broker=document.getElementById('f-ab').value;
+  if(broker==='__new'){broker=document.getElementById('f-ab2').value.trim();if(!broker){alert('증권사 이름을 입력하세요');return;}}
   const thr=parseFloat(document.getElementById('f-at').value)||5;
   const memo=document.getElementById('f-am').value.trim();
   const principal=numIn('f-ap'), cash=numIn('f-ac');
