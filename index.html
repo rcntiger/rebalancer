@@ -480,7 +480,7 @@ const ACCENTS=[{n:'블루',h:'#4A90D9'},{n:'그린',h:'#2ECC7A'},{n:'퍼플',h:'
   {n:'오렌지',h:'#E8A020'},{n:'레드',h:'#E85555'},{n:'티파니',h:'#1EC8C8'}];
 const AC=['#4A90D9','#2ECC7A','#E8A020','#C06AF0','#E85555','#00BCD4','#FF6B9D','#8BC34A','#FF9800','#9C27B0'];
 const BROKERS=['한국투자증권','삼성증권','키움증권','미래에셋증권','NH투자증권','신한투자증권','KB증권','대신증권','기타'];
-const APP_VERSION='2.7.0';
+const APP_VERSION='2.8.0';
 const PROXY_MIN='2.3.0';   // 앱이 요구하는 최소 프록시 버전
 const KIS='http://localhost:5000';
 
@@ -530,7 +530,7 @@ let S={
   sortDash:{key:'order',asc:true},   // order = 도넛과 같은 순서(12시부터 시계방향)
   chartRange:'30d',
   chartAccFilter:'all',
-  detailCols:{price:true,avgPrice:true,profitRate:true,costVal:true,evalVal:true,holdPct:true,qty:true},
+  detailCols:{price:true,avgPrice:true,profitRate:true,ytd:true,costVal:true,evalVal:true,holdPct:true,qty:true},
   detailBudget:{mode:false,val:''},
 };
 
@@ -775,6 +775,53 @@ async function kisRate(ak,as_,tok){
   }catch(e){}
   return null;
 }
+// 1월 2일 종가 (그날 휴장이면 그 뒤 첫 거래일 종가)
+function ytdEnd(y){const t=localDate().replace(/-/g,'');const e=`${y}0115`;return t<e?t:e;}
+async function kisYtdKrx(ak,as_,tok,ticker,y){
+  const code=ticker.replace(/\.(KS|KQ)$/i,'');
+  for(const mkt of /\.KQ$/i.test(ticker)?['Q','J']:['J','Q']){
+    try{
+      const d=await kisGet(`/uapi/domestic-stock/v1/quotations/inquire-daily-itemchartprice?FID_COND_MRKT_DIV_CODE=${mkt}&FID_INPUT_ISCD=${code}&FID_INPUT_DATE_1=${y}0102&FID_INPUT_DATE_2=${ytdEnd(y)}&FID_PERIOD_DIV_CODE=D&FID_ORG_ADJ_PRC=0`,'FHKST03010100',ak,as_,tok);
+      if(d?.rt_cd==='0'){
+        const r=(d.output2||[]).filter(x=>x.stck_bsop_date>=`${y}0102`&&+x.stck_clpr>0).sort((a,b)=>a.stck_bsop_date.localeCompare(b.stck_bsop_date))[0];
+        if(r)return{y,d:r.stck_bsop_date,p:+r.stck_clpr};
+      }
+    }catch(e){}
+  }
+  return null;
+}
+async function kisYtdUs(ak,as_,tok,ticker,y){
+  for(const ex of['NAS','NYS','AMS']){
+    try{
+      const d=await kisGet(`/uapi/overseas-price/v1/quotations/dailyprice?AUTH=&EXCD=${ex}&SYMB=${ticker}&GUBN=0&BYMD=${ytdEnd(y)}&MODP=1`,'HHDFS76240000',ak,as_,tok);
+      if(d?.rt_cd==='0'){
+        const r=(d.output2||[]).filter(x=>x.xymd>=`${y}0102`&&+x.clos>0).sort((a,b)=>a.xymd.localeCompare(b.xymd))[0];
+        if(r)return{y,d:r.xymd,p:+r.clos};
+      }
+    }catch(e){}
+  }
+  return null;
+}
+// 올해 기준가가 없는 종목만 조회 (종목당 1년에 1번, 실패하면 하루 1번만 재시도)
+async function fetchYtdBases(ak,as_,tok){
+  const y=new Date().getFullYear(),today=localDate();
+  if(today<`${y}-01-05`)return 0;   // 1/2 종가가 확정되기 전(미국은 한국시간 1/3 아침 마감)
+  const need=[];
+  S.accounts.forEach(acc=>acc.stocks.forEach(st=>{
+    if(st.ytd&&st.ytd.y===y)return;
+    if(st.ytdTry===today)return;
+    need.push({acc,st});
+  }));
+  let got=0;
+  for(let i=0;i<need.length;i+=3){
+    await Promise.all(need.slice(i,i+3).map(async({acc,st})=>{
+      const r=acc.market==='KRX'?await kisYtdKrx(ak,as_,tok,st.ticker,y):await kisYtdUs(ak,as_,tok,st.ticker,y);
+      if(r){st.ytd=r;delete st.ytdTry;got++;}else st.ytdTry=today;
+    }));
+    if(i+3<need.length)await new Promise(r=>setTimeout(r,300));
+  }
+  return got;
+}
 async function kisOilPrice(ak,as_,tok){
   // WTI 원유 선물 (NYMEX: CLc1)
   try{
@@ -856,6 +903,8 @@ async function refreshPrices(){
       // 배치 간 200ms 대기 (API 제한 방어)
       if(i+5<allStocks.length) await new Promise(r=>setTimeout(r,200));
     }
+    // 연초대비 기준가(1/2 종가): 없는 종목만 조회
+    try{await fetchYtdBases(ak,as_,tok);}catch(e){console.warn('연초 기준가 조회 실패',e);}
     S.updated=new Date().toISOString();save();
     // 일부 실패 시 스냅샷을 남기지 않음 (추이 왜곡 방지)
     if(failed.length===0) saveSnapshot();
@@ -942,14 +991,43 @@ function devDetail(acc){
   });
   return{over,under,unloaded};
 }
+// ── 정기 점검 ──
+// acc.period: 점검 주기(개월, 0=사용 안 함, 기본 3) / acc.lastReb: 마지막 리밸런싱 날짜(YYYY-MM-DD)
+const PERIODS=[[0,'사용 안 함'],[1,'매월'],[3,'분기 (3개월)'],[6,'반기 (6개월)'],[12,'1년']];
+function addMonths(ds,m){const d=new Date(ds+'T00:00:00');d.setMonth(d.getMonth()+m);return localDate(d);}
+function rebStatus(acc){
+  const period=acc.period??3;
+  const due=acc.lastReb&&period>0?addMonths(acc.lastReb,period):null;
+  const isDue=!!due&&localDate()>=due;
+  const dd=devDetail(acc);
+  const out=accReady(acc)?dd.over+dd.under:0;
+  return{period,due,isDue,out,need:out>0||isDue};
+}
+// 전체 리밸런싱(범위 안 종목도 목표로): 직접 고른 값 > 점검일 도래 시 자동
+const _fullReb={};
+function fullRebFor(acc){return acc.id in _fullReb?_fullReb[acc.id]:rebStatus(acc).isDue;}
+
+// ── 연초대비 (1월 2일 종가, 휴장이면 다음 거래일) ──
+function ytdPct(st){
+  const y=new Date().getFullYear();
+  return st.ytd&&st.ytd.y===y&&st.ytd.p>0&&st.loaded&&st.price>0?(st.price-st.ytd.p)/st.ytd.p*100:null;
+}
+// 계좌 연초대비 = 지금 보유 수량 기준 (1/2 종가 평가액 → 현재 평가액)
+function accYtd(acc){
+  let b=0,c=0,miss=0;
+  acc.stocks.forEach(st=>{const q=st.quantity||0;if(q<=0)return;
+    if(ytdPct(st)==null){miss++;return;} b+=q*st.ytd.p;c+=q*st.price;});
+  return{pct:b>0?(c-b)/b*100:null,miss};
+}
 function rebActions(acc){
+  const full=fullRebFor(acc);
   const tk=accKrw(acc);
   return acc.stocks.map(st=>{
     const cw=stW(acc,st),diff=st.tgt-cw;
     const dKrw=tk*diff/100;
     const dLocal=acc.market==='KRX'?dKrw:dKrw/S.rate;
     const dSh=st.price>0?dLocal/st.price:0;
-    const hold=Math.abs(diff)<=(acc.thr||5);
+    const hold=!full&&Math.abs(diff)<=(acc.thr||5);
     return{st,cw,tw:st.tgt,dKrw,dLocal,dSh,hold};
   }).sort((a,b)=>Math.abs(b.dKrw)-Math.abs(a.dKrw));
 }
@@ -1017,6 +1095,19 @@ function renderDash(){
   if(!S.accounts.length){
     h+=`<div class="empty"><div class="ei">🏦</div><p>계좌를 추가해보세요</p><div class="es">+ 버튼으로 KRX/US 계좌 추가</div></div>`;
   }else{
+    // ── 리밸런싱 알림 (범위 이탈 / 정기 점검일) ──
+    const alerts=S.accounts.map((a,i)=>({a,i,r:rebStatus(a)})).filter(x=>x.r.need);
+    if(alerts.length){
+      h+=`<div style="margin:10px 12px 0;padding:12px 14px;border-radius:12px;border:1px solid rgba(232,160,32,.35);background:rgba(232,160,32,.08)">
+        <div style="font-size:var(--f-sm);font-weight:700;color:var(--warn);margin-bottom:6px">🔔 리밸런싱 알림</div>
+        ${alerts.map(({a,i,r})=>`<div onclick="openDetail(${i})" style="display:flex;align-items:center;gap:8px;padding:7px 0;cursor:pointer;border-top:1px solid rgba(232,160,32,.18)">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:var(--f-sm);font-weight:600;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${a.name}</div>
+            <div style="font-size:var(--f-xs);color:var(--t2)">${[r.out>0?`범위 이탈 ${r.out}종목`:'',r.isDue?`정기 점검일 (${r.due.slice(5).replace('-','/')})`:''].filter(Boolean).join(' · ')}</div>
+          </div>
+          <span style="color:var(--t3)">›</span></div>`).join('')}
+      </div>`;
+    }
     h+=`<div class="sec-lbl">계좌 목록</div>`;
     S.accounts.forEach((acc,i)=>{
       const v=accVal(acc),color=AC[acc.ci%5],dv=devCnt(acc);
@@ -1053,9 +1144,11 @@ function renderDash(){
                 ${acc.market==='KRX'?fn(v)+'원':'$'+fn(v,2)}
               </div>
               ${(()=>{const pf=accPerf(acc);
-                if(pf.cumPct!=null)return`<div class="ai-pf" style="font-size:calc(15px * var(--fs));color:var(--t2)">누적 ${pctSpan(pf.cumPct)}</div>`;
-                if(pf.evalPct!=null)return`<div class="ai-pf" style="font-size:calc(15px * var(--fs));color:var(--t2)">평가 ${pctSpan(pf.evalPct)}</div>`;
-                return'';})()}
+                const yt=accYtd(acc).pct;
+                const ys=yt!=null?` · 연초 ${pctSpan(yt)}`:'';
+                if(pf.cumPct!=null)return`<div class="ai-pf" style="font-size:calc(15px * var(--fs));color:var(--t2)">누적 ${pctSpan(pf.cumPct)}${ys}</div>`;
+                if(pf.evalPct!=null)return`<div class="ai-pf" style="font-size:calc(15px * var(--fs));color:var(--t2)">평가 ${pctSpan(pf.evalPct)}${ys}</div>`;
+                return yt!=null?`<div class="ai-pf" style="font-size:calc(15px * var(--fs));color:var(--t2)">연초 ${pctSpan(yt)}</div>`:'';})()}
               <div style="display:flex;flex-direction:column;gap:3px">
                 <span class="ai-sub" style="font-size:calc(17px * var(--fs));color:var(--t2)">${acc.stocks.length}종목</span>
                 <span class="ai-sub" style="font-size:calc(17px * var(--fs));color:var(--t2)">${acc.broker}</span>
@@ -1067,6 +1160,7 @@ function renderDash(){
                   : acc.stocks.some(s=>!s.loaded)
                     ? `<span class="tag" style="font-size:calc(17px * var(--fs));background:var(--s2);border:1px solid var(--bd);color:var(--t3)">시세 미조회</span>`
                     : `<span class="tag tag-ok" style="font-size:calc(17px * var(--fs))">✓ 균형</span>`}
+                ${rebStatus(acc).isDue?`<span class="tag" style="font-size:calc(17px * var(--fs));background:rgba(74,144,217,.12);border:1px solid rgba(74,144,217,.3);color:var(--accent)">📅 점검일</span>`:''}
               </div>
             </div>
 
@@ -1299,6 +1393,7 @@ function renderDetailContent(idx){
         g+=cell('평가손익',pf.evalPL==null?'-':`<span style="color:${plC(pf.evalPL)}">${moneyStr(acc,pf.evalPL,true)}</span>`);
       }
       if(pf.cash>0&&!(pf.principal>0))g+=cell('예수금',moneyStr(acc,pf.cash));
+      {const yt=accYtd(acc);if(yt.pct!=null)g+=cell('연초대비 (1/2 종가 · 보유 기준)',pctSpan(yt.pct)+(yt.miss?`<span style="font-size:max(10px, calc(11px * var(--fs)));color:var(--t3);font-weight:400"> · ${yt.miss}종목 제외</span>`:''));}
       const notes=[];
       if(!(pf.principal>0))notes.push('수정에서 <b>납입원금·예수금</b>을 입력하면 누적수익률이 표시됩니다');
       if(pf.noAvg>0)notes.push(`매입가 미입력 ${pf.noAvg}종목은 평가수익률에서 제외`);
@@ -1312,6 +1407,33 @@ function renderDetailContent(idx){
     h+=`<div class="alert alert-warn" style="margin:4px 12px">시세 미조회: ${missingTickers(acc).join(', ')} — 리밸런싱 계산을 멈췄습니다</div>`;
   if(tw!==100&&acc.stocks.length)
     h+=`<div class="alert alert-warn" style="margin:4px 12px">목표 비중 합계 ${tw.toFixed(1)}% (${tw>100?'초과':'부족'} ${Math.abs(100-tw).toFixed(1)}%)</div>`;
+
+  // ── 정기 점검 ──────────────────────────────────
+  {
+    const r=rebStatus(acc),full=fullRebFor(acc);
+    const fmt=d=>d?d.replace(/-/g,'.'):'';
+    const chip=(on,label,fn)=>`<button onclick="${fn}" style="padding:5px 12px;border-radius:14px;font-size:var(--f-xs);cursor:pointer;font-weight:${on?700:500};
+      border:1px solid ${on?'var(--accent)':'var(--bd)'};background:${on?'color-mix(in srgb,var(--accent) 14%,transparent)':'var(--s2)'};color:${on?'var(--accent)':'var(--t2)'}">${label}</button>`;
+    h+=`<div style="margin:6px 12px;padding:12px 14px;border-radius:12px;border:1px solid ${r.isDue?'rgba(74,144,217,.45)':'var(--bd)'};background:${r.isDue?'rgba(74,144,217,.07)':'var(--s1)'}">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span style="font-size:var(--f-sm);font-weight:700">📅 정기 점검</span>
+        <select onchange="setRebPeriod(${idx},this.value)" style="padding:4px 8px;border-radius:8px;border:1px solid var(--bd);background:var(--s2);color:var(--t1);font-size:var(--f-xs)">
+          ${PERIODS.map(([m,l])=>`<option value="${m}" ${r.period===m?'selected':''}>${l}</option>`).join('')}
+        </select>
+        <div style="flex:1"></div>
+        <button onclick="markRebDone(${idx})" style="padding:6px 12px;border-radius:9px;border:1px solid var(--buy);background:rgba(46,204,122,.1);color:var(--buy);font-size:var(--f-xs);font-weight:700;cursor:pointer">✓ 리밸런싱 완료</button>
+      </div>
+      <div style="font-size:var(--f-xs);color:var(--t2);margin-top:8px;line-height:1.6">
+        ${acc.lastReb?`마지막 ${fmt(acc.lastReb)}`:'완료 기록 없음 — 매매를 마친 뒤 <b>✓ 리밸런싱 완료</b>를 누르면 다음 점검일을 알려 드립니다'}
+        ${r.due?` · 다음 <b style="color:${r.isDue?'var(--accent)':'var(--t1)'}">${fmt(r.due)}</b>`:''}
+        ${r.isDue?`<br><span style="color:var(--accent);font-weight:600">점검일입니다 — 범위 안 종목도 목표 비중으로 계산합니다</span>`:''}
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;margin-top:8px;flex-wrap:wrap">
+        <span style="font-size:var(--f-xs);color:var(--t3)">계산 방식</span>
+        ${chip(!full,`범위 밖만 (±${thr}%)`,`setFullReb(${idx},false)`)}${chip(full,'전체를 목표로','setFullReb('+idx+',true)')}
+      </div>
+    </div>`;
+  }
 
   // ── 총투자금액 리밸런싱 패널 (종목 목록 위) ──────
   if(priceLoaded){
@@ -1379,6 +1501,7 @@ function renderDetailContent(idx){
     {key:'price',    label:'현재가',   sort:'val'},
     {key:'avgPrice', label:'매입가',   sort:'avg'},
     {key:'profitRate',label:'수익률',  sort:'pl'},
+    {key:'ytd',      label:'연초대비', sort:'ytd'},
     {key:'costVal',  label:'매입금액', sort:'cost'},
     {key:'evalVal',  label:'평가금액', sort:'eval'},
     {key:'holdPct',  label:'보유비중', sort:'hold'},
@@ -1418,6 +1541,7 @@ function renderDetailContent(idx){
         if(va===vb)return 0;
       }
       if(sd.key==='hold'){va=stW(acc,a.st);vb=stW(acc,b.st);}
+      if(sd.key==='ytd'){const NA=sd.asc?Infinity:-Infinity;va=ytdPct(a.st)??NA;vb=ytdPct(b.st)??NA;if(va===vb)return 0;}
       if(sd.key==='qty'){va=a.st.quantity||0;vb=b.st.quantity||0;}
       return sd.asc?va-vb:vb-va;
     });
@@ -1481,6 +1605,9 @@ function renderDetailContent(idx){
           if(c.key==='price')    content=`<div style="font-family:var(--mono);font-size:var(--f-xs);font-weight:600;color:${priceColor}">${priceStr}</div>`;
           if(c.key==='avgPrice') content=`<div style="font-family:var(--mono);font-size:var(--f-xs);color:var(--t2)">${avgStr}</div>`;
           if(c.key==='profitRate')content=`<div style="font-size:var(--f-sm);font-weight:700">${plStr}</div>${plPct!==null&&costVal>0?`<div style="font-size:calc(15px * var(--fs));color:${plColor};font-family:var(--mono)">${plKrw>=0?'+':''}${fn(Math.round(plKrw))}원</div>`:''}`;
+          if(c.key==='ytd'){const yp=ytdPct(st);
+            content=yp==null?`<div style="font-size:var(--f-xs);color:var(--t3)">-</div>`
+              :`<div style="font-size:var(--f-sm);font-weight:700">${pctSpan(yp)}</div><div style="font-size:max(10px, calc(11px * var(--fs)));color:var(--t3);font-family:var(--mono)">${st.ytd.d.slice(4,6)}/${st.ytd.d.slice(6)} ${isKrx?fn(st.ytd.p)+'원':'$'+fn(st.ytd.p,2)}</div>`;}
           if(c.key==='costVal')  content=`<div style="font-family:var(--mono);font-size:var(--f-xs);color:var(--t2)">${costStr}</div>`;
           if(c.key==='evalVal')  content=`<div style="font-family:var(--mono);font-size:var(--f-xs);font-weight:600;color:var(--t1)">${evalStr}</div>`;
           if(c.key==='holdPct')  content=`<div style="font-family:var(--mono);font-size:var(--f-sm);font-weight:600;color:var(--accent)">${holdStr}</div>`;
@@ -1902,6 +2029,15 @@ function setDetailSort(k){
   renderDetailContent(S.detailIdx);
 }
 
+function setRebPeriod(idx,v){S.accounts[idx].period=+v;save();renderDetailContent(idx);render();}
+function setFullReb(idx,on){_fullReb[S.accounts[idx].id]=on;renderDetailContent(idx);}
+function markRebDone(idx){
+  const acc=S.accounts[idx];
+  if(!confirm(`오늘(${localDate()})을 '${acc.name}' 리밸런싱 완료일로 기록할까요?`))return;
+  acc.lastReb=localDate();delete _fullReb[acc.id];
+  save();renderDetailContent(idx);render();
+}
+
 /* ════════════════════════ 컬럼 설정 시트 ════════════════════════ */
 function openColSheet(){
   const dc=S.detailCols;
@@ -1909,6 +2045,7 @@ function openColSheet(){
     {key:'price',    label:'현재가'},
     {key:'avgPrice', label:'매입가'},
     {key:'profitRate',label:'수익률'},
+    {key:'ytd',      label:'연초대비 (1/2 종가)'},
     {key:'costVal',  label:'매입금액'},
     {key:'evalVal',  label:'평가금액'},
     {key:'holdPct',  label:'보유비중'},
@@ -2170,7 +2307,10 @@ function openFontSheet(){
     background:var(--s2);color:${dis?'var(--t3)':'var(--t1)'};font-size:calc(22px * var(--fs));font-weight:700;cursor:${dis?'default':'pointer'}">${label}</button>`;
   document.getElementById('sheet-theme').innerHTML=`
     <div class="sheet-handle" style="display:block"></div>
-    <h3 style="margin-bottom:14px">글자 설정</h3>
+    <div style="display:flex;align-items:center;margin-bottom:14px">
+      <h3 style="margin:0;flex:1">글자 설정</h3>
+      <button onclick="closeMBg('modal-theme')" aria-label="닫기" style="width:38px;height:38px;border-radius:10px;border:1px solid var(--bd);background:var(--s2);color:var(--t2);font-size:calc(18px * var(--fs));cursor:pointer">✕</button>
+    </div>
     <div style="font-size:var(--f-sm);font-weight:700;color:var(--t2);margin-bottom:8px">크기</div>
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
       ${pb('−','setFsStep(-1)',S.fsPct<=FS_MIN)}
@@ -2204,7 +2344,8 @@ function openFontSheet(){
       <div style="width:42px;height:24px;border-radius:12px;background:${S.monoNum?'var(--accent)':'var(--bd2)'};position:relative;flex-shrink:0">
         <div style="position:absolute;top:3px;left:${S.monoNum?21:3}px;width:18px;height:18px;border-radius:50%;background:#fff;transition:left .15s"></div>
       </div>
-    </div>`;
+    </div>
+    <button onclick="closeMBg('modal-theme')" style="width:100%;margin-top:12px;padding:13px;border-radius:12px;border:none;background:var(--accent);color:#fff;font-size:var(--f-md);font-weight:700;cursor:pointer">완료</button>`;
   document.getElementById('modal-theme').classList.add('open');
 }
 /* ════════════════════════ 설정 ════════════════════════ */
