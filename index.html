@@ -283,6 +283,8 @@ html,body{height:100%;font-family:var(--sans);background:var(--bg);color:var(--t
 .dt-msort{display:none;align-items:center;gap:8px;padding:4px 12px 10px;font-size:var(--f-sm);border-bottom:1px solid var(--bd)}
 .dt-msort select{flex:1;min-width:0;padding:8px 10px;border-radius:9px;border:1px solid var(--bd);background:var(--s2);color:var(--t1);font-size:var(--f-sm)}
 .dt-msort button{flex-shrink:0;padding:8px 12px;border-radius:9px;border:1px solid var(--bd);background:var(--s2);color:var(--t2);font-size:var(--f-sm);cursor:pointer;white-space:nowrap}
+.drag-h{flex-shrink:0;display:flex;align-items:center;justify-content:center;width:calc(30px * var(--fs));height:calc(36px * var(--fs));margin-left:-4px;font-size:calc(22px * var(--fs));line-height:1;color:var(--t3);cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;border-radius:8px}
+.drag-h:active{cursor:grabbing;color:var(--accent);background:var(--s2)}
 .act-pill{display:inline-flex;align-items:center;gap:3px;padding:4px 10px;border-radius:999px;font-size:var(--f-sm);font-weight:700;white-space:nowrap;line-height:1.2}
 .act-pill.buy{background:color-mix(in srgb,var(--buy) 16%,transparent);color:var(--buy);border:1px solid color-mix(in srgb,var(--buy) 45%,transparent)}
 .act-pill.sell{background:color-mix(in srgb,var(--sellc) 16%,transparent);color:var(--sellc);border:1px solid color-mix(in srgb,var(--sellc) 45%,transparent)}
@@ -516,7 +518,7 @@ const ACCENTS=[{n:'블루',h:'#4A90D9'},{n:'그린',h:'#2ECC7A'},{n:'퍼플',h:'
   {n:'오렌지',h:'#E8A020'},{n:'레드',h:'#E85555'},{n:'티파니',h:'#1EC8C8'}];
 const AC=['#4A90D9','#2ECC7A','#E8A020','#C06AF0','#E85555','#00BCD4','#FF6B9D','#8BC34A','#FF9800','#9C27B0'];
 const BROKERS=['한국투자증권','삼성증권','키움증권','미래에셋증권','NH투자증권','나무증권','신한투자증권','KB증권','대신증권','기타'];
-const APP_VERSION='2.18.0';
+const APP_VERSION='2.19.0';
 // ── 계좌 안 종목 순서 바꾸기 (저장 순서 = 대시보드 '그래프순'·도넛 순서) ──
 let _stOrd=false;
 function toggleStOrder(){
@@ -529,6 +531,43 @@ function moveSt(i,d){
   [a[i],a[j]]=[a[j],a[i]];
   delete _dnSel[S.detailIdx];save();renderDetailContent(S.detailIdx);
   requestAnimationFrame(()=>document.getElementById('sord-'+j)?.scrollIntoView({block:'nearest',behavior:'smooth'}));
+}
+// ── 끌어서 순서 바꾸기 (≡ 손잡이만 끌림 → 모바일 화면 스크롤과 겹치지 않음) ──
+// kind: 'acc' = 계좌(#ord-i), 'st' = 종목(#sord-i)
+let _drag=null;
+function dragStart(e,kind,i){
+  e.preventDefault();
+  const pre=kind==='acc'?'ord-':'sord-';
+  const rows=[];for(let k=0;;k++){const el=document.getElementById(pre+k);if(!el)break;rows.push(el);}
+  const row=rows[i];if(!row)return;
+  let sc=row.parentElement;while(sc&&sc!==document.body&&!(sc.scrollHeight>sc.clientHeight&&/auto|scroll/.test(getComputedStyle(sc).overflowY)))sc=sc.parentElement;
+  if(!sc||sc===document.body)sc=document.scrollingElement;
+  _drag={kind,from:i,to:i,rows,row,y0:e.clientY,sc,st0:sc.scrollTop,h:row.getBoundingClientRect().height+parseFloat(getComputedStyle(row.parentElement).rowGap||getComputedStyle(row.parentElement).gap||0)};
+  row.style.zIndex='5';row.style.position='relative';row.style.boxShadow='0 10px 28px rgba(0,0,0,.45)';row.style.transition='none';row.style.opacity='.95';
+  rows.forEach(r=>{if(r!==row)r.style.transition='transform .15s';});
+  document.addEventListener('pointermove',dragMove);
+  document.addEventListener('pointerup',dragEnd,{once:true});
+  document.addEventListener('pointercancel',dragEnd,{once:true});
+}
+function dragMove(e){
+  const d=_drag;if(!d)return;
+  // 화면 위·아래 끝 근처면 자동 스크롤
+  const r=d.sc===document.scrollingElement?{top:0,bottom:innerHeight}:d.sc.getBoundingClientRect();
+  if(e.clientY<r.top+60)d.sc.scrollTop-=10;else if(e.clientY>r.bottom-60)d.sc.scrollTop+=10;
+  const dy=e.clientY-d.y0+(d.sc.scrollTop-d.st0);
+  d.row.style.transform=`translateY(${dy}px)`;
+  d.to=Math.max(0,Math.min(d.rows.length-1,d.from+Math.round(dy/d.h)));
+  d.rows.forEach((el,k)=>{if(k===d.from)return;
+    let sh=0;if(d.from<d.to&&k>d.from&&k<=d.to)sh=-d.h;else if(d.from>d.to&&k<d.from&&k>=d.to)sh=d.h;
+    el.style.transform=sh?`translateY(${sh}px)`:'';});
+}
+function dragEnd(){
+  const d=_drag;_drag=null;document.removeEventListener('pointermove',dragMove);if(!d)return;
+  if(d.to===d.from){d.rows.forEach(el=>{el.style.transform='';el.style.boxShadow='';el.style.zIndex='';});return;}
+  const arr=d.kind==='acc'?S.accounts:S.accounts[S.detailIdx].stocks;
+  arr.splice(d.to,0,arr.splice(d.from,1)[0]);
+  if(d.kind==='acc'){for(const k in _dnSel)delete _dnSel[k];save();renderDash();}
+  else{delete _dnSel[S.detailIdx];save();renderDetailContent(S.detailIdx);}
 }
 // ── 계좌 순서 바꾸기 ──
 let _accOrd=false;
@@ -1420,6 +1459,7 @@ function renderDash(){
       const ob='width:calc(40px * var(--fs));height:calc(36px * var(--fs));border-radius:9px;border:1px solid var(--bd);background:var(--s2);color:var(--t1);font-size:var(--f-sm);cursor:pointer';
       h+=`<div style="display:flex;flex-direction:column;gap:8px">${S.accounts.map((acc,i)=>`
         <div id="ord-${i}" class="acc-card" style="padding:10px 12px;display:flex;align-items:center;gap:10px;cursor:default">
+          <span class="drag-h" onpointerdown="dragStart(event,'acc',${i})" title="끌어서 옮기기">≡</span>
           <span style="font-family:var(--mono);color:var(--t3);font-size:var(--f-xs);min-width:1.6em">${i+1}</span>
           <div class="acc-dot" style="background:${AC[acc.ci%5]}"></div>
           <div style="flex:1;min-width:0"><div class="acc-name nm2" style="margin:0;padding:0">${esc(acc.name)}</div>
@@ -1427,7 +1467,7 @@ function renderDash(){
           <button onclick="moveAcc(${i},-1)" ${i===0?'disabled style="'+ob+';opacity:.3"':`style="${ob}"`} title="위로">▲</button>
           <button onclick="moveAcc(${i},1)" ${i===S.accounts.length-1?'disabled style="'+ob+';opacity:.3"':`style="${ob}"`} title="아래로">▼</button>
         </div>`).join('')}</div>
-        <div style="font-size:max(10px, calc(12px * var(--fs)));color:var(--t3);text-align:center;margin-top:10px">▲▼로 옮긴 순서는 바로 저장되고 다른 기기에도 동기화됩니다</div>`;
+        <div style="font-size:max(10px, calc(12px * var(--fs)));color:var(--t3);text-align:center;margin-top:10px">≡를 끌거나 ▲▼로 옮긴 순서는 바로 저장되고 다른 기기에도 동기화됩니다</div>`;
     }
     if(!_accOrd)S.accounts.forEach((acc,i)=>{
       const v=accVal(acc),color=AC[acc.ci%5],dv=devCnt(acc);
@@ -1841,6 +1881,7 @@ function renderDetailContent(idx){
     const ob='width:calc(40px * var(--fs));height:calc(36px * var(--fs));border-radius:9px;border:1px solid var(--bd);background:var(--s2);color:var(--t1);font-size:var(--f-sm);cursor:pointer;flex-shrink:0';
     h+=`<div style="display:flex;flex-direction:column;gap:6px;padding:6px 12px 0">${acc.stocks.map((st,i)=>`
       <div id="sord-${i}" style="display:flex;align-items:center;gap:10px;padding:9px 12px;border:1px solid var(--bd);border-radius:10px;background:var(--s1)">
+        <span class="drag-h" onpointerdown="dragStart(event,'st',${i})" title="끌어서 옮기기">≡</span>
         <span style="font-family:var(--mono);color:var(--t3);font-size:var(--f-xs);min-width:1.6em">${i+1}</span>
         <div style="width:10px;height:10px;border-radius:50%;background:${stockBaseColor(acc,st)};flex-shrink:0"></div>
         <div style="flex:1;min-width:0"><div class="nm2" style="font-size:var(--f-sm);font-weight:600">${esc(st.name||st.ticker)}</div>
@@ -1848,7 +1889,7 @@ function renderDetailContent(idx){
         <button onclick="moveSt(${i},-1)" ${i===0?`disabled style="${ob};opacity:.3"`:`style="${ob}"`} title="위로">▲</button>
         <button onclick="moveSt(${i},1)" ${i===acc.stocks.length-1?`disabled style="${ob};opacity:.3"`:`style="${ob}"`} title="아래로">▼</button>
       </div>`).join('')}</div>
-      <div style="font-size:max(10px, calc(12px * var(--fs)));color:var(--t3);text-align:center;margin:10px 12px 0;line-height:1.5">이 순서가 대시보드 '그래프순'·도넛 순서가 됩니다 · 완료하면 상세도 이 순서로 보여 줍니다</div>`;
+      <div style="font-size:max(10px, calc(12px * var(--fs)));color:var(--t3);text-align:center;margin:10px 12px 0;line-height:1.5">≡를 끌거나 ▲▼로 옮깁니다 · 이 순서가 대시보드 '그래프순'·도넛 순서가 됩니다 · 완료하면 상세도 이 순서로 보여 줍니다</div>`;
     h+=`<div style="padding:14px 12px 20px"></div>`;
     document.getElementById('detail-content').innerHTML=h;
     return;
