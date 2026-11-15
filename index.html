@@ -516,7 +516,7 @@ const ACCENTS=[{n:'블루',h:'#4A90D9'},{n:'그린',h:'#2ECC7A'},{n:'퍼플',h:'
   {n:'오렌지',h:'#E8A020'},{n:'레드',h:'#E85555'},{n:'티파니',h:'#1EC8C8'}];
 const AC=['#4A90D9','#2ECC7A','#E8A020','#C06AF0','#E85555','#00BCD4','#FF6B9D','#8BC34A','#FF9800','#9C27B0'];
 const BROKERS=['한국투자증권','삼성증권','키움증권','미래에셋증권','NH투자증권','나무증권','신한투자증권','KB증권','대신증권','기타'];
-const APP_VERSION='2.16.0';
+const APP_VERSION='2.17.0';
 // ── 계좌 순서 바꾸기 ──
 let _accOrd=false;
 function toggleAccOrder(){_accOrd=!_accOrd;renderDash();}
@@ -1217,6 +1217,13 @@ function moneyStr(acc,v,signed){
 }
 function numIn(id){return parseFloat((document.getElementById(id)?.value||'').replace(/[^\d.]/g,''))||0;}
 function accKrw(acc){const v=accVal(acc);return acc.market==='KRX'?v:v*S.rate;}
+// ── 종목별 리밸런싱 제외 (st.noReb) ──
+// 제외 종목은 매매 계산에서 빼고, 나머지 종목은 '제외 종목을 뺀 금액' 안에서 목표 비중을 맞춘다
+const isEx=(acc,st)=>!acc.noReb&&!!st.noReb;
+function stKrw(acc,st){const v=(st.quantity||0)*(st.price||0);return acc.market==='KRX'?v:v*S.rate;}
+function exKrw(acc){return acc.stocks.reduce((t,st)=>t+(isEx(acc,st)?stKrw(acc,st):0),0);}
+function rbBase(acc){return accKrw(acc)-exKrw(acc);}
+function rbW(acc,st){const b=rbBase(acc);return b>0?stKrw(acc,st)/b*100:0;}   // 리밸런싱 대상 안에서의 비중
 function stW(acc,st){
   const t=accKrw(acc);if(!t)return 0;
   const v=acc.market==='KRX'?(st.quantity||0)*(st.price||0):(st.quantity||0)*(st.price||0)*S.rate;
@@ -1224,7 +1231,7 @@ function stW(acc,st){
 }
 function devCnt(acc){
   if(acc.noReb)return 0;
-  return acc.stocks.filter(st=>st.loaded&&Math.abs(stW(acc,st)-st.tgt)>(acc.thr||5)).length;
+  return acc.stocks.filter(st=>!isEx(acc,st)&&st.loaded&&Math.abs(rbW(acc,st)-st.tgt)>(acc.thr||5)).length;
 }
 function devDetail(acc){
   // 초과(over): 현재비중 > 목표비중+임계값
@@ -1233,7 +1240,8 @@ function devDetail(acc){
   if(acc.noReb)return{over,under,unloaded};
   acc.stocks.forEach(st=>{
     if(!st.loaded){unloaded++;return;}
-    const diff=stW(acc,st)-st.tgt;
+    if(isEx(acc,st))return;
+    const diff=rbW(acc,st)-st.tgt;
     if(diff>(acc.thr||5)) over++;
     else if(diff<-(acc.thr||5)) under++;
   });
@@ -1303,9 +1311,9 @@ function accYtd(acc){
 }
 function rebActions(acc){
   const full=fullRebFor(acc);
-  const tk=accKrw(acc);
-  return acc.stocks.map(st=>{
-    const cw=stW(acc,st),diff=st.tgt-cw;
+  const tk=rbBase(acc);
+  return acc.stocks.filter(st=>!isEx(acc,st)).map(st=>{
+    const cw=rbW(acc,st),diff=st.tgt-cw;
     const dKrw=tk*diff/100;
     const dLocal=acc.market==='KRX'?dKrw:dKrw/S.rate;
     const dSh=st.price>0?dLocal/st.price:0;
@@ -1316,7 +1324,8 @@ function rebActions(acc){
 function rebActionsWithBudget(acc, budgetKrw){
   // 총투자금액 기준: 각 종목 목표금액 = budget * tgt/100, 현재보유금액 차감 → 매수/매도
   const isKrx=acc.market==='KRX';
-  return acc.stocks.map(st=>{
+  budgetKrw=Math.max(0,budgetKrw-exKrw(acc));   // 제외 종목 금액은 빼고 나머지로 맞춤
+  return acc.stocks.filter(st=>!isEx(acc,st)).map(st=>{
     const tgtKrw=budgetKrw*(st.tgt/100);
     const curKrw=isKrx?(st.quantity||0)*(st.price||0):(st.quantity||0)*(st.price||0)*S.rate;
     const dKrw=tgtKrw-curKrw;
@@ -1498,7 +1507,7 @@ function renderDash(){
                 let shown=0;
                 return sorted.map((st)=>{
                   if(shown>=6)return'';
-                  const curW=anyLoaded?stW(acc,st):(acc.noReb?0:st.tgt);
+                  const curW=anyLoaded?(acc.noReb||isEx(acc,st)?stW(acc,st):rbW(acc,st)):(acc.noReb||isEx(acc,st)?0:st.tgt);   // 목표와 같은 기준(제외 종목 뺀 금액)으로 비교
                   if(curW<=0&&!(st.tgt>0&&!acc.noReb)&&!(acc.noReb&&!anyLoaded))return'';   // 목표 비중이 있으면 미보유(0주)여도 표시
                   shown++;
                   const baseCol=stockBaseColor(acc,st);
@@ -1508,7 +1517,7 @@ function renderDash(){
                   <div style="width:10px;height:10px;border-radius:50%;background:${baseCol};flex-shrink:0"></div>
                   <div class="lg-name nm2" title="${esc(st.name||st.ticker)}" style="font-size:calc(17px * var(--fs));color:var(--t2);flex:1">${esc(st.name||st.ticker)}</div>
                   <div style="display:flex;align-items:center;gap:4px;flex-shrink:0">
-                    ${acc.noReb?'':`<span style="font-size:max(10px, calc(13px * var(--fs)));font-family:DM Mono;color:var(--accent);font-weight:500">${st.tgt}%</span>
+                    ${acc.noReb?'':isEx(acc,st)?`<span style="font-size:max(10px, calc(12px * var(--fs)));color:var(--t3)">제외</span>`:`<span style="font-size:max(10px, calc(13px * var(--fs)));font-family:DM Mono;color:var(--accent);font-weight:500">${st.tgt}%</span>
                     <span style="font-size:max(10px, calc(11px * var(--fs)));color:var(--t3)">→</span>`}
                     <span class="lg-cur" style="font-size:calc(17px * var(--fs));font-family:DM Mono;color:${baseCol};font-weight:700">${anyLoaded?curW.toFixed(1)+'%':'?'}</span>
                   </div>
@@ -1579,7 +1588,8 @@ function renderDonuts(){
     // 바깥 링: 목표 비중 (보유하지 않은 종목 포함 전 종목)
     if(acc.noReb){ if(!(anyLoaded&&ring(r,ir,st=>stW(acc,st))))blank(r,ir); }
     else{
-    if(!ring(r,31,st=>st.tgt||0))blank(r,31);
+    {const tot=accKrw(acc),frac=anyLoaded&&tot>0?rbBase(acc)/tot:1;
+     if(!ring(r,31,st=>isEx(acc,st)?(anyLoaded?stW(acc,st):0):(st.tgt||0)*frac))blank(r,31);}
     // 안쪽 링: 현재 비중 (시세 조회 후, 보유 종목만)
     if(!(anyLoaded&&ring(29.5,ir,st=>stW(acc,st))))blank(29.5,ir);
     }
@@ -1630,7 +1640,7 @@ function donutFocus(i,k){
   const nm=full.replace(/^(KODEX|TIGER|KIWOOM|ACE|RISE|SOL|PLUS|HANARO|KBSTAR|ARIRANG|KOSEF|TIMEFOLIO|1Q|BNK|WON|파워|마이티|에셋플러스)\s+/i,'')||full;
   t1.textContent=nm.length>8?nm.slice(0,7)+'…':nm;t1.setAttribute('font-size','5.6');t1.setAttribute('y','48');
   const anyLoaded=acc.stocks.some(s=>s.loaded);
-  t2.textContent=acc.noReb?(anyLoaded?stW(acc,st).toFixed(1)+'%':'-'):`${st.tgt}%→${anyLoaded?stW(acc,st).toFixed(1)+'%':'-'}`;
+  t2.textContent=acc.noReb?(anyLoaded?stW(acc,st).toFixed(1)+'%':'-'):isEx(acc,st)?`제외 · ${anyLoaded?stW(acc,st).toFixed(1)+'%':'-'}`:`${st.tgt}%→${anyLoaded?rbW(acc,st).toFixed(1)+'%':'-'}`;
   t2.setAttribute('font-size','5.4');t2.setAttribute('fill',stockBaseColor(acc,st));
 }
 function donutTap(i,k){
@@ -1658,7 +1668,7 @@ function renderDetailContent(idx){
   const acc=S.accounts[idx];
   const color=AC[acc.ci%5];
   const v=accVal(acc),vk=accKrw(acc);
-  const tw=acc.stocks.reduce((s,st)=>s+st.tgt,0);
+  const tw=acc.stocks.reduce((s,st)=>s+(isEx(acc,st)?0:st.tgt),0);
   const priceLoaded=acc.stocks.some(s=>s.loaded);
   const thr=acc.thr||5;
   const isKrx=acc.market==='KRX';
@@ -1851,7 +1861,7 @@ function renderDetailContent(idx){
   if(!acc.stocks.length){
     h+=`<div class="empty" style="padding:40px 20px"><div class="ei">📈</div><p>종목을 추가하세요</p></div>`;
   } else {
-    const maxPct=Math.max(...acc.stocks.flatMap(st=>[st.tgt,priceLoaded?stW(acc,st):st.tgt]),1);
+    const maxPct=Math.max(...acc.stocks.filter(st=>!isEx(acc,st)).flatMap(st=>[st.tgt,priceLoaded?rbW(acc,st):st.tgt]),1);
     const sortedStocks=[...acc.stocks.map((st,si)=>({st,si}))].sort((a,b)=>{
       let va,vb;
       if(sd.key==='name'){va=a.st.name||a.st.ticker;vb=b.st.name||b.st.ticker;return sd.asc?va.localeCompare(vb):vb.localeCompare(va);}
@@ -1876,11 +1886,12 @@ function renderDetailContent(idx){
     });
 
     sortedStocks.forEach(({st,si})=>{
-      const cw=priceLoaded?stW(acc,st):0;
+      const ex=isEx(acc,st);
+      const cw=priceLoaded?(ex?stW(acc,st):acc.noReb?stW(acc,st):rbW(acc,st)):0;
       const diff=cw-st.tgt;
       const isOver=diff>thr, isUnder=diff<-thr;
       const isLoaded=st.loaded;
-      const curColor=!isLoaded?'var(--t3)':acc.noReb?stockBaseColor(acc,st):isOver?'var(--sell)':isUnder?'var(--warn)':'var(--buy)';
+      const curColor=!isLoaded?'var(--t3)':acc.noReb||ex?stockBaseColor(acc,st):isOver?'var(--sell)':isUnder?'var(--warn)':'var(--buy)';
       const tgtColor='color-mix(in srgb,var(--accent) 55%,transparent)';
       const tgtBorder='var(--accent)';
       const BAR=180;
@@ -1889,7 +1900,9 @@ function renderDetailContent(idx){
 
       // ── 리밸런싱 계산 (budget 연동) ──────────────
       let actionHtml='';
-      if(ready&&isLoaded&&totalKrw>0){
+      if(ex){
+        actionHtml=`<span class="act-pill hold" title="리밸런싱 계산에서 뺀 종목">⊘ 제외</span>`;
+      } else if(ready&&isLoaded&&totalKrw>0){
         actionHtml=actionCellHtml(actionMap[st.ticker],isKrx,sym,unit);
       } else if(isLoaded){
         actionHtml=`<div style="font-size:var(--f-sm);color:var(--t3)">대기</div>`;
@@ -1951,7 +1964,8 @@ function renderDetailContent(idx){
         ${acc.noReb?'':`<div class="dt-reb" style="flex:1;text-align:right;min-width:calc(120px * var(--fs))"><div class="dt-lbl">리밸런싱</div><div id="reb-cell-${st.ticker.replace(/\./g,'_')}" class="dt-act">${actionHtml}</div></div>`}
         <!-- 비중 바 -->
         <div class="dt-bar" style="flex:1.4;min-width:calc(${acc.noReb?100:170}px * var(--fs))">
-          ${acc.noReb?`<div style="display:flex;align-items:center;gap:8px">
+          ${acc.noReb||ex?`<div style="display:flex;align-items:center;gap:8px">
+            ${ex?`<span style="font-size:max(10px, calc(12px * var(--fs)));color:var(--t3);white-space:nowrap">계좌 내 비중</span>`:''}
             <div style="flex:1;height:13px;background:var(--s2);border-radius:3px;overflow:hidden">
               ${isLoaded
                 ?`<div style="width:${Math.min(cw,100)}%;height:100%;background:${curColor};border-radius:3px;transition:width .4s ease"></div>`
@@ -2578,11 +2592,16 @@ function openStockSheet(accIdx,stIdx){
     </div>
     <div class="field-row">
       <div class="field"><label>보유 수량</label><input id="f-sq" type="number" value="${st?.quantity??''}" placeholder="0" step="0.001"></div>
-      ${acc.noReb?`<input id="f-sw" type="hidden" value="${st?.tgt??0}">`:`<div class="field"><label>목표 비중 (%)</label><input id="f-sw" type="number" value="${st?.tgt??''}" placeholder="0" step="0.1"></div>`}
+      ${acc.noReb?`<input id="f-sw" type="hidden" value="${st?.tgt??0}">`:`<div class="field" id="f-sw-box" style="${st?.noReb?'display:none':''}"><label>목표 비중 (%)</label><input id="f-sw" type="number" value="${st?.tgt??''}" placeholder="0" step="0.1"></div>`}
     </div>
     <div class="field"><label>매입가 ${isKrx?'(원)':'(USD)'} <span style="font-size:max(10px, calc(11px * var(--fs)));color:var(--t3)">선택 — 수익률 계산에 사용</span></label>
       <input id="f-savg" type="number" value="${st?.avgPrice??''}" placeholder="${isKrx?'예: 75000':'예: 182.50'}" step="${isKrx?'1':'0.01'}">
     </div>
+    ${acc.noReb?'':`<label style="display:flex;align-items:flex-start;gap:10px;margin:0 2px 13px;cursor:pointer">
+      <input type="checkbox" id="f-sex" ${st?.noReb?'checked':''} onchange="document.getElementById('f-sw-box').style.display=this.checked?'none':''" style="width:18px;height:18px;margin-top:2px;flex-shrink:0;accent-color:var(--accent)">
+      <span><span style="font-size:var(--f-sm);font-weight:600">리밸런싱에서 제외 (보유만)</span><br>
+      <span style="font-size:max(10px, calc(12px * var(--fs)));color:var(--t3);line-height:1.5">매매 계산·알림에서 빼고, 나머지 종목은 이 종목을 뺀 금액으로 목표 비중을 맞춥니다</span></span>
+    </label>`}
     <div class="field"><label>주당 연 배당금 ${isKrx?'(원)':'(USD)'} <span style="font-size:max(10px, calc(11px * var(--fs)));color:var(--t3)">선택 — 비우면 자동${st?.divAuto?.ttm>0?` (최근 1년 ${isKrx?fn(Math.round(st.divAuto.ttm))+'원':'$'+fn(st.divAuto.ttm,2)}, ${st.divAuto.n}회)`:''}</span></label>
       <input id="f-sdps" type="number" value="${st?.dps??''}" placeholder="${st?.divAuto?.ttm>0?(isKrx?Math.round(st.divAuto.ttm):st.divAuto.ttm.toFixed(2)):'자동 조회 값이 없으면 입력'}" step="${isKrx?'1':'0.01'}">
     </div>
@@ -2598,7 +2617,9 @@ async function saveSt(){
   if(ticker&&!document.getElementById('f-sn').value.trim())await autoName(true);   // 비어 있으면 저장 전에 조회
   const name=document.getElementById('f-sn').value.trim()||ticker;
   const qty=parseFloat(document.getElementById('f-sq').value);
-  const tgt=parseFloat(document.getElementById('f-sw').value);
+  const exEl=document.getElementById('f-sex'),exc=!!exEl?.checked;
+  let tgt=parseFloat(document.getElementById('f-sw').value);
+  if(exc&&isNaN(tgt))tgt=0;
   const avgPriceRaw=document.getElementById('f-savg').value;
   const avgPrice=avgPriceRaw!==''?parseFloat(avgPriceRaw):undefined;
   const dpsRaw=document.getElementById('f-sdps').value;
@@ -2610,9 +2631,10 @@ async function saveSt(){
   if(_stIdx>=0){
     const old=acc.stocks[_stIdx];
     if(old.ticker!==tk)delete old.divAuto;   // 종목이 바뀌면 자동 배당 다시 조회
-    Object.assign(old,{ticker:tk,name,quantity:qty,tgt,avgPrice,dps});
+    Object.assign(old,{ticker:tk,name,quantity:qty,tgt,avgPrice,dps,noReb:exc||undefined});
+    if(!exc)delete old.noReb;
   }else{
-    acc.stocks.push({id:Date.now().toString(),ticker:tk,name,quantity:qty,tgt,avgPrice,dps,price:0,loaded:false});
+    acc.stocks.push({id:Date.now().toString(),ticker:tk,name,quantity:qty,tgt,avgPrice,dps,price:0,loaded:false,...(exc?{noReb:true}:{})});
   }
   save();closeMBg('modal-stock');renderDetailContent(_stAccIdx);
 }
