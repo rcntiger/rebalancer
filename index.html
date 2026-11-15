@@ -480,7 +480,7 @@ const ACCENTS=[{n:'블루',h:'#4A90D9'},{n:'그린',h:'#2ECC7A'},{n:'퍼플',h:'
   {n:'오렌지',h:'#E8A020'},{n:'레드',h:'#E85555'},{n:'티파니',h:'#1EC8C8'}];
 const AC=['#4A90D9','#2ECC7A','#E8A020','#C06AF0','#E85555','#00BCD4','#FF6B9D','#8BC34A','#FF9800','#9C27B0'];
 const BROKERS=['한국투자증권','삼성증권','키움증권','미래에셋증권','NH투자증권','신한투자증권','KB증권','대신증권','기타'];
-const APP_VERSION='2.10.0';
+const APP_VERSION='2.11.0';
 const PROXY_MIN='2.3.0';   // 앱이 요구하는 최소 프록시 버전
 const KIS='http://localhost:5000';
 
@@ -737,6 +737,52 @@ async function kisGet(pathQ,trId,ak,as_,tok){
   const r=await fetch(`${KIS}${pathQ}`,
     {headers:{authorization:`Bearer ${tok}`,appkey:ak,appsecret:as_,tr_id:trId,'content-type':'application/json'}});
   try{return await r.json();}catch(e){return null;}
+}
+// ── 종목명 조회 (KIS 상품기본조회) ──
+async function kisName(market,ticker){
+  let ak='',as_='',tok='';
+  if(!useCloudKis()){
+    const k=await getKeys();
+    if(!k)throw new Error('KIS 키가 없거나 잠겨 있습니다 — ☁ 로그인하거나 설정에서 키를 입력하세요');
+    ak=k.ak;as_=k.as;tok=await kisToken(ak,as_);
+  }
+  const pick=o=>(o?.prdt_abrv_name||o?.prdt_name||o?.prdt_eng_name||'').trim();
+  if(market==='KRX'){
+    const code=ticker.replace(/\.(KS|KQ)$/i,'');
+    // 주식기본조회 → 안 되면 상품기본조회
+    for(const [path,tr] of [['search-stock-info','CTPF1002R'],['search-info','CTPF1604R']]){
+      try{
+        const d=await kisGet(`/uapi/domestic-stock/v1/quotations/${path}?PRDT_TYPE_CD=300&PDNO=${encodeURIComponent(code)}`,tr,ak,as_,tok);
+        const n=d?.rt_cd==='0'?pick(d.output):'';
+        if(n)return n;
+      }catch(e){}
+    }
+    return null;
+  }
+  // 미국: 상품기본조회 — 나스닥(512) → 뉴욕(513) → 아멕스(529) 차례로
+  for(const t of ['512','513','529']){
+    try{
+      const d=await kisGet(`/uapi/domestic-stock/v1/quotations/search-info?PRDT_TYPE_CD=${t}&PDNO=${encodeURIComponent(ticker)}`,'CTPF1604R',ak,as_,tok);
+      const n=d?.rt_cd==='0'?pick(d.output):'';
+      if(n)return n;
+    }catch(e){}
+  }
+  return null;
+}
+let _nameReq=0;
+async function autoName(force){
+  const tkEl=document.getElementById('f-sk'),nmEl=document.getElementById('f-sn'),msg=document.getElementById('f-sn-msg');
+  if(!tkEl||!nmEl)return;
+  const tk=tkEl.value.trim().toUpperCase();
+  if(!tk||(!force&&nmEl.value.trim()))return;
+  const acc=S.accounts[_stAccIdx],req=++_nameReq;
+  msg.style.color='var(--t3)';msg.textContent='종목명 찾는 중…';
+  try{
+    const n=await kisName(acc.market,tk);
+    if(req!==_nameReq)return;
+    if(n){nmEl.value=n;msg.textContent='';}
+    else{msg.style.color='var(--warn)';msg.textContent='종목명을 찾지 못했습니다 — 코드를 확인하거나 직접 입력하세요';}
+  }catch(e){if(req!==_nameReq)return;msg.style.color='var(--warn)';msg.textContent=e.message.replace('클라우드 시세: ','');}
 }
 async function kisKrx(ak,as_,tok,ticker){
   // .KS / .KQ suffix 제거 → KIS API는 6자리 종목코드만 허용
@@ -2292,8 +2338,12 @@ function openStockSheet(accIdx,stIdx){
       <h3 style="margin:0">${isEdit?'종목 수정':'종목 추가'}</h3>
       <span class="mkt-badge ${isKrx?'mkt-krx':'mkt-us'}">${acc.market}</span>
     </div>
-    <div class="field"><label>티커 심볼</label><input id="f-sk" value="${st?.ticker??''}" placeholder="${isKrx?'예: 005930':'예: AAPL'}"></div>
-    <div class="field"><label>종목명</label><input id="f-sn" value="${st?.name??''}" placeholder="${isKrx?'예: 삼성전자':'예: Apple Inc.'}"></div>
+    <div class="field"><label>티커 심볼</label><input id="f-sk" value="${st?.ticker??''}" placeholder="${isKrx?'예: 005930':'예: AAPL'}" onchange="autoName()" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}"></div>
+    <div class="field"><label>종목명 <span style="font-size:max(10px, calc(11px * var(--fs)));color:var(--t3)">코드 입력 시 자동</span></label>
+      <div style="display:flex;gap:6px"><input id="f-sn" style="flex:1;min-width:0" value="${st?.name??''}" placeholder="${isKrx?'예: 삼성전자':'예: 애플'}">
+      <button type="button" onclick="autoName(true)" title="종목명 다시 찾기" style="flex-shrink:0;padding:0 12px;border-radius:9px;border:1px solid var(--bd);background:var(--s2);color:var(--t2);cursor:pointer;font-size:var(--f-sm)">🔍</button></div>
+      <div id="f-sn-msg" style="font-size:max(10px, calc(12px * var(--fs)));margin-top:4px;min-height:0"></div>
+    </div>
     <div class="field-row">
       <div class="field"><label>보유 수량</label><input id="f-sq" type="number" value="${st?.quantity??''}" placeholder="0" step="0.001"></div>
       ${acc.noReb?`<input id="f-sw" type="hidden" value="${st?.tgt??0}">`:`<div class="field"><label>목표 비중 (%)</label><input id="f-sw" type="number" value="${st?.tgt??''}" placeholder="0" step="0.1"></div>`}
@@ -2311,16 +2361,17 @@ function openStockSheet(accIdx,stIdx){
     </div>`;
   document.getElementById('modal-stock').classList.add('open');
 }
-function saveSt(){
+async function saveSt(){
   const ticker=document.getElementById('f-sk').value.trim().toUpperCase();
-  const name=document.getElementById('f-sn').value.trim();
+  if(ticker&&!document.getElementById('f-sn').value.trim())await autoName(true);   // 비어 있으면 저장 전에 조회
+  const name=document.getElementById('f-sn').value.trim()||ticker;
   const qty=parseFloat(document.getElementById('f-sq').value);
   const tgt=parseFloat(document.getElementById('f-sw').value);
   const avgPriceRaw=document.getElementById('f-savg').value;
   const avgPrice=avgPriceRaw!==''?parseFloat(avgPriceRaw):undefined;
   const dpsRaw=document.getElementById('f-sdps').value;
   const dps=dpsRaw!==''&&parseFloat(dpsRaw)>0?parseFloat(dpsRaw):undefined;
-  if(!ticker||!name||isNaN(qty)||isNaN(tgt)){alert('모든 항목을 입력하세요');return;}
+  if(!ticker||isNaN(qty)||isNaN(tgt)){alert('종목코드·보유 수량'+(S.accounts[_stAccIdx].noReb?'':'·목표 비중')+'을 입력하세요');return;}
   const acc=S.accounts[_stAccIdx];
   const isKrx=acc.market==='KRX';
   const tk=isKrx&&!ticker.includes('.')?ticker+'.KS':ticker;

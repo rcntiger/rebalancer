@@ -16,7 +16,8 @@ const KIS = "https://openapi.koreainvestment.com:9443";
 
 // 허용: 국내·해외 "시세(quotations)" 조회만
 const ALLOWED_PATH = /^\/uapi\/(domestic-stock|overseas-price)\/v1\/quotations\/[a-z0-9-]+$/;
-const ALLOWED_TR = /^(FHK|HHD|FHP)[A-Z0-9]{5,}$/;
+// FHK·HHD·FHP: 시세 / CTPF1002R·CTPF1604R: 주식·상품기본조회(종목명)
+const ALLOWED_TR = /^((FHK|HHD|FHP)[A-Z0-9]{5,}|CTPF1002R|CTPF1604R)$/;
 const YAHOO: Record<string, string> = { OIL: "CL=F", US10Y: "^TNX" };
 
 const cors = {
