@@ -12,7 +12,7 @@
   --mono:'DM Mono',monospace;--sans:'Noto Sans KR',sans-serif;
   /* ── 글자 크기 스케일 (JS에서 --fs 값을 변경) ── */
   --fs:1;        /* 기본 배율 (small=0.85, normal=1, large=1.15, xlarge=1.3) */
-  --f-xs:  calc(15px * var(--fs));
+  --f-xs:  max(10px, calc(15px * var(--fs)));
   --f-sm:  calc(17px * var(--fs));
   --f-md:  calc(19px * var(--fs));
   --f-lg:  calc(27px * var(--fs));
@@ -57,7 +57,7 @@ html,body{height:100%;font-family:var(--sans);background:var(--bg);color:var(--t
 }
 
 /* ── 탭 ── */
-.tab{flex:1;padding:10px 0 8px;text-align:center;font-size:17px;color:var(--t2);
+.tab{flex:1;padding:10px 0 8px;text-align:center;font-size:calc(17px * var(--fs));color:var(--t2);
   cursor:pointer;border-bottom:2px solid transparent;transition:color .15s,border-color .15s;font-weight:500;}
 .tab.active{color:var(--accent);border-bottom-color:var(--accent);}
 .tab-icon{font-size:var(--f-md);display:block;margin-bottom:2px;}
@@ -67,7 +67,7 @@ html,body{height:100%;font-family:var(--sans);background:var(--bg);color:var(--t
 
 /* ── 공통 ── */
 .icon-btn{width:42px;height:42px;border-radius:9px;background:var(--s2);border:1px solid var(--bd);
-  display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:17px;
+  display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:calc(17px * var(--fs));
   color:var(--t2);transition:background .15s,color .15s;position:relative;flex-shrink:0;}
 .icon-btn:hover{background:var(--s3);color:var(--t1);}
 .spacer{flex:1;}
@@ -83,7 +83,7 @@ html,body{height:100%;font-family:var(--sans);background:var(--bg);color:var(--t
 .tag{padding:3px 9px;border-radius:5px;font-size:var(--f-xs);font-weight:600;}
 .tag-warn{background:rgba(232,160,32,.12);border:1px solid rgba(232,160,32,.3);color:var(--warn);}
 .tag-ok{background:rgba(46,204,122,.1);border:1px solid rgba(46,204,122,.25);color:var(--buy);}
-.alert{margin:3px 12px;padding:10px 14px;border-radius:9px;display:flex;align-items:center;gap:8px;font-size:16px;}
+.alert{margin:3px 12px;padding:10px 14px;border-radius:9px;display:flex;align-items:center;gap:8px;font-size:calc(16px * var(--fs));}
 .alert-warn{background:rgba(232,160,32,.1);border:1px solid rgba(232,160,32,.3);color:var(--warn);}
 
 /* ── 히어로 ── */
@@ -93,13 +93,13 @@ html,body{height:100%;font-family:var(--sans);background:var(--bg);color:var(--t
 .hero-total{font-family:var(--mono);font-size:var(--f-3xl);font-weight:500;color:var(--t1);letter-spacing:-.5px;margin:4px 0 6px;}
 .kpi-row{display:flex;gap:7px;margin-top:12px;}
 .kpi{flex:1;background:var(--s2);border:1px solid var(--bd);border-radius:9px;padding:8px 6px;text-align:center;}
-.kpi-l{font-size:16px;color:var(--t3);margin-bottom:3px;}
-.kpi-v{font-family:var(--mono);font-size:16px;font-weight:500;}
+.kpi-l{font-size:calc(16px * var(--fs));color:var(--t3);margin-bottom:3px;}
+.kpi-v{font-family:var(--mono);font-size:calc(16px * var(--fs));font-weight:500;}
 
 /* ── 계좌 카드 ── */
 .acc-card{padding:13px;cursor:pointer;}
 .acc-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
-.acc-name{font-size:17px;font-weight:600;color:var(--t1);flex:1;margin:0 8px;}
+.acc-name{font-size:calc(17px * var(--fs));font-weight:600;color:var(--t1);flex:1;margin:0 8px;}
 .mkt-badge{font-size:var(--f-xs);font-weight:700;font-family:var(--mono);padding:2px 7px;border-radius:4px;}
 .mkt-krx{background:rgba(52,99,255,.15);color:#6FA3FF;}
 .mkt-us{background:rgba(255,80,80,.12);color:#FF8A8A;}
@@ -108,7 +108,7 @@ html,body{height:100%;font-family:var(--sans);background:var(--bg);color:var(--t
 /* ── FAB ── */
 .fab{position:sticky;bottom:18px;float:right;margin-right:18px;
   width:50px;height:50px;border-radius:15px;background:var(--accent);color:#fff;
-  display:flex;align-items:center;justify-content:center;font-size:21px;
+  display:flex;align-items:center;justify-content:center;font-size:calc(21px * var(--fs));
   cursor:pointer;border:none;box-shadow:0 8px 24px color-mix(in srgb,var(--accent) 45%,transparent);
   transition:transform .15s,box-shadow .15s;z-index:5;}
 .fab:hover{transform:scale(1.06);}
@@ -130,7 +130,7 @@ html,body{height:100%;font-family:var(--sans);background:var(--bg);color:var(--t
   background:color-mix(in srgb,var(--accent) 12%,transparent);
   border:1px solid color-mix(in srgb,var(--accent) 30%,transparent);
   color:var(--accent);padding:5px 11px;border-radius:8px;
-  font-size:8px;font-weight:600;cursor:pointer;font-family:var(--sans);}
+  font-size:max(10px, calc(11px * var(--fs)));font-weight:600;cursor:pointer;font-family:var(--sans);}
 .action-card{margin:3px 12px;background:var(--s1);border:1px solid var(--bd);
   border-radius:11px;padding:12px;display:flex;align-items:center;gap:10px;}
 .action-card:hover{border-color:var(--bd2);}
@@ -149,7 +149,7 @@ html,body{height:100%;font-family:var(--sans);background:var(--bg);color:var(--t
 #detail-panel .back-bar{flex-shrink:0;display:flex;align-items:center;gap:8px;
   padding:12px 14px;background:var(--s1);border-bottom:1px solid var(--bd);cursor:pointer;}
 #detail-panel .back-bar:hover .back-lbl{color:var(--accent);}
-.back-lbl{font-size:20px;color:var(--t2);transition:color .15s;}
+.back-lbl{font-size:calc(20px * var(--fs));color:var(--t2);transition:color .15s;}
 .detail-header{margin:12px;padding:15px;border-radius:13px;}
 .stock-row{padding:12px 14px;border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:10px;}
 .stock-row:last-child{border-bottom:none;}
@@ -157,7 +157,7 @@ html,body{height:100%;font-family:var(--sans);background:var(--bg);color:var(--t
 .wm-bar{height:4px;background:var(--s2);border-radius:2px;position:relative;overflow:hidden;margin-top:3px;}
 .wm-t{position:absolute;top:0;left:0;bottom:0;border-radius:2px;background:color-mix(in srgb,var(--accent) 25%,transparent);}
 .wm-f{position:absolute;top:0;left:0;bottom:0;border-radius:2px;}
-.act-btn{font-size:20px;cursor:pointer;padding:3px 7px;border-radius:6px;
+.act-btn{font-size:calc(20px * var(--fs));cursor:pointer;padding:3px 7px;border-radius:6px;
   border:1px solid var(--bd);background:var(--s2);}
 
 /* ── 차트 ── */
@@ -169,7 +169,7 @@ html,body{height:100%;font-family:var(--sans);background:var(--bg);color:var(--t
 .alloc-wrap{margin:12px;}
 .alloc-bar{height:22px;border-radius:7px;overflow:hidden;display:flex;gap:1px;}
 .alloc-seg{display:flex;align-items:center;justify-content:center;
-  font-size:17px;color:#fff;font-weight:600;font-family:var(--mono);overflow:hidden;}
+  font-size:calc(17px * var(--fs));color:#fff;font-weight:600;font-family:var(--mono);overflow:hidden;}
 .legend-box{margin:0 12px;background:var(--s1);border:1px solid var(--bd);border-radius:12px;overflow:hidden;}
 .legend-row{display:flex;align-items:center;gap:10px;padding:10px 13px;border-bottom:1px solid var(--bd);}
 .legend-row:last-child{border-bottom:none;}
@@ -209,7 +209,7 @@ html,body{height:100%;font-family:var(--sans);background:var(--bg);color:var(--t
 .pin-box{background:var(--s1);border:1px solid var(--bd2);border-radius:20px;
   padding:28px 24px 22px;width:310px;text-align:center;}
 .pin-icon{width:52px;height:52px;border-radius:50%;margin:0 auto 13px;
-  display:flex;align-items:center;justify-content:center;font-size:21px;
+  display:flex;align-items:center;justify-content:center;font-size:calc(21px * var(--fs));
   background:color-mix(in srgb,var(--accent) 12%,transparent);}
 .pin-dots{display:flex;justify-content:center;gap:12px;margin:18px 0 6px;}
 .pin-dot{width:12px;height:12px;border-radius:50%;border:1.5px solid var(--bd2);transition:all .12s;}
@@ -231,7 +231,7 @@ html,body{height:100%;font-family:var(--sans);background:var(--bg);color:var(--t
 .mode-btn{flex:1;padding:12px;border-radius:11px;background:var(--s2);border:1px solid var(--bd);
   color:var(--t2);cursor:pointer;text-align:center;}
 .mode-btn.active{background:color-mix(in srgb,var(--accent) 12%,transparent);border-color:var(--accent);color:var(--accent);}
-.mode-btn .mi{font-size:17px;display:block;margin-bottom:5px;}
+.mode-btn .mi{font-size:calc(17px * var(--fs));display:block;margin-bottom:5px;}
 .mode-btn .ml{font-size:var(--f-xs);font-weight:600;}
 .clr-row{display:flex;justify-content:space-between;margin-bottom:8px;}
 .csw{width:42px;height:42px;border-radius:50%;cursor:pointer;
@@ -251,9 +251,10 @@ html,body{height:100%;font-family:var(--sans);background:var(--bg);color:var(--t
 .guide-box{margin:0 12px 14px;padding:13px;border-radius:11px;
   background:color-mix(in srgb,var(--accent) 7%,transparent);
   border:1px solid color-mix(in srgb,var(--accent) 20%,transparent);}
+.guide-step span{overflow-wrap:anywhere;}
 .guide-step{display:flex;align-items:flex-start;gap:8px;margin-top:7px;}
 .snum{width:17px;height:17px;border-radius:50%;background:color-mix(in srgb,var(--accent) 20%,transparent);
-  display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;color:var(--accent);flex-shrink:0;}
+  display:flex;align-items:center;justify-content:center;font-size:max(10px, calc(11px * var(--fs)));font-weight:700;color:var(--accent);flex-shrink:0;}
 .info-row{display:flex;justify-content:space-between;margin-bottom:9px;font-size:var(--f-sm);padding:0 12px;}
 .info-row span:first-child{color:var(--t2);}
 .info-row span:last-child{font-family:var(--mono);}
@@ -275,7 +276,7 @@ html,body{height:100%;font-family:var(--sans);background:var(--bg);color:var(--t
 
 /* ── 빈상태 ── */
 .empty{text-align:center;padding:60px 20px;}
-.empty .ei{font-size:49px;opacity:.3;margin-bottom:14px;}
+.empty .ei{font-size:calc(49px * var(--fs));opacity:.3;margin-bottom:14px;}
 .empty p{color:var(--t2);font-size:var(--f-sm);}
 .empty .es{color:var(--t3);font-size:var(--f-xs);margin-top:6px;}
 @keyframes spin{to{transform:rotate(360deg)}}
@@ -301,47 +302,50 @@ html,body{height:100%;font-family:var(--sans);background:var(--bg);color:var(--t
 /* ════════ 모바일 (폭 600px 이하) ════════ */
 @media (max-width:600px){
   :root{
-    --f-xs:calc(13px * var(--fs));--f-sm:calc(15px * var(--fs));--f-md:calc(16px * var(--fs));
+    --f-xs:max(10px, calc(13px * var(--fs)));--f-sm:calc(15px * var(--fs));--f-md:calc(16px * var(--fs));
     --f-lg:calc(20px * var(--fs));--f-xl:calc(19px * var(--fs));--f-2xl:calc(23px * var(--fs));--f-3xl:calc(26px * var(--fs));
   }
   /* 앱바 */
   #appbar{padding:0 10px;gap:5px;}
-  #appbar h1{font-size:19px;white-space:nowrap;min-width:0;flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;gap:5px;}
-  #appbar h1 #app-ver{font-size:11px !important;}
+  #appbar h1{font-size:calc(19px * var(--fs));white-space:nowrap;min-width:0;flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;gap:5px;}
+  #appbar h1 #app-ver{font-size:max(10px, calc(11px * var(--fs))) !important;}
   #appbar .spacer{display:none;}
-  .icon-btn{width:36px;height:36px;font-size:15px;margin-left:0 !important;}
-  .tab{font-size:15px;padding:8px 0 6px;}
+  .icon-btn{width:36px;height:36px;font-size:calc(15px * var(--fs));margin-left:0 !important;}
+  .tab{font-size:calc(15px * var(--fs));padding:8px 0 6px;}
   /* 요약 */
   .hero{margin:10px;padding:14px;}
   .kpi-row{flex-wrap:wrap;gap:6px;}
   .kpi{flex:1 1 calc(33.3% - 6px);min-width:0;}
-  .kpi-l,.kpi-v{font-size:13px !important;}
+  .kpi-l,.kpi-v{font-size:max(10px, calc(13px * var(--fs))) !important;}
   /* 계좌 카드: 정보+도넛 / 아래에 범례 */
   .acc-body{display:grid !important;grid-template-columns:1fr auto;align-items:center;row-gap:10px;}
   .acc-donut{padding:0 !important;}
-  .acc-donut svg{width:132px;height:132px;}
-  .acc-donut .donut-cap{font-size:10px !important;}
+  /* 글자를 키울수록 도넛을 줄여 금액 칸 확보 (100%=132px, 160%=102px) */
+  .acc-donut svg{width:clamp(96px, calc(182px - 50px * var(--fs)), 140px);height:clamp(96px, calc(182px - 50px * var(--fs)), 140px);}
+  .acc-donut .donut-cap{font-size:max(10px, calc(11px * var(--fs))) !important;max-width:clamp(96px, calc(182px - 50px * var(--fs)), 140px) !important;}
+  .kpi-l{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .acc-legend{grid-column:1 / -1;}
-  .acc-info .ai-amt{font-size:20px !important;}
-  .acc-info .ai-sub{font-size:14px !important;}
-  .acc-info .ai-pf{font-size:13px !important;}
-  .acc-info .tag{font-size:13px !important;white-space:nowrap;}
-  .acc-legend .lg-name,.acc-legend .lg-cur{font-size:14px !important;}
-  .acc-name{font-size:16px;}
+  .acc-info .ai-amt{font-size:calc(20px * var(--fs)) !important;}
+  .acc-info .ai-sub{font-size:calc(14px * var(--fs)) !important;}
+  .acc-info .ai-pf{font-size:max(10px, calc(13px * var(--fs))) !important;}
+  .acc-info .tag{font-size:max(10px, calc(13px * var(--fs))) !important;white-space:nowrap;}
+  .acc-legend .lg-name,.acc-legend .lg-cur{font-size:calc(14px * var(--fs)) !important;}
+  .acc-name{font-size:calc(16px * var(--fs));}
   /* 상세 */
   #detail-panel .back-bar,#settings-panel .back-bar{padding:9px 10px;gap:6px;}
-  .back-lbl{font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;}
-  .act-btn{font-size:15px;padding:3px 8px;}
+  .back-lbl{font-size:calc(16px * var(--fs));white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;}
+  .act-btn{font-size:calc(15px * var(--fs));padding:3px 8px;}
   /* 상세: 종목별 카드 (좌우 스크롤 없음) */
   .dt-wrap{overflow:visible;}
   .dt-row{width:auto !important;min-width:0 !important;}
   /* 머리줄 → 정렬 칩 */
   .dt-head{flex-wrap:wrap;gap:6px !important;padding:6px 12px 10px !important;}
   .dt-head > div{flex:0 0 auto !important;min-width:0 !important;padding:4px 10px;border:1px solid var(--bd);border-radius:14px;
-    background:var(--s2);font-size:12px !important;text-align:left !important;}
+    background:var(--s2);font-size:max(10px, calc(12px * var(--fs))) !important;text-align:left !important;}
   .dt-head > .dt-reb{display:none;}
   /* 종목 카드 */
-  .dt-row:not(.dt-head){display:grid !important;grid-template-columns:repeat(3,1fr);gap:7px 10px !important;
+  /* 칸 폭을 글자 크기에 맞춰 자동: 보통은 3칸, 크게 하면 2칸 */
+  .dt-row:not(.dt-head){display:grid !important;grid-template-columns:repeat(auto-fit,minmax(calc(98px * var(--fs)),1fr));gap:7px 10px !important;
     margin:8px 10px;padding:12px !important;border:1px solid var(--bd) !important;border-radius:12px;background:var(--s1);}
   .dt-row:not(.dt-head) > div{min-width:0 !important;}
   .dt-row:not(.dt-head) .dt-name{grid-column:1 / -1;display:grid;grid-template-columns:1fr auto;align-items:center;column-gap:8px;
@@ -350,17 +354,17 @@ html,body{height:100%;font-family:var(--sans);background:var(--bg);color:var(--t
   .dt-row:not(.dt-head) .dt-name > div:nth-child(2){grid-column:1;}
   .dt-row:not(.dt-head) .dt-name > div:nth-child(3){grid-column:2;grid-row:1 / span 2;margin-top:0 !important;}
   .dt-num,.dt-reb{text-align:left !important;white-space:normal;}
-  .dt-lbl{display:block;font-size:11px;color:var(--t3);margin-bottom:1px;}
-  .dt-num div,.dt-act div{font-size:13px !important;}
-  .dt-row .dt-lbl{font-size:11px !important;font-weight:400 !important;}
+  .dt-lbl{display:block;font-size:max(10px, calc(11px * var(--fs)));color:var(--t3);margin-bottom:1px;}
+  .dt-num div,.dt-act div{font-size:max(10px, calc(13px * var(--fs))) !important;}
+  .dt-row .dt-lbl{font-size:max(10px, calc(11px * var(--fs))) !important;font-weight:400 !important;}
   .dt-row:not(.dt-head){align-items:start !important;}
   .dt-num > div:nth-child(2){font-weight:600;}
   .dt-reb{grid-column:span 2;}
   .dt-act > div{display:inline-block;margin-right:8px;}
   .dt-row:not(.dt-head) .dt-bar{grid-column:1 / -1;}
   /* 하단 배너 */
-  #proxy-banner{padding:7px 10px;font-size:12px;}
-  #proxy-banner button{padding:5px 10px !important;font-size:12px !important;}
+  #proxy-banner{padding:7px 10px;font-size:max(10px, calc(12px * var(--fs)));}
+  #proxy-banner button{padding:5px 10px !important;font-size:max(10px, calc(12px * var(--fs))) !important;}
 }
 </style>
 </head>
@@ -369,11 +373,11 @@ html,body{height:100%;font-family:var(--sans);background:var(--bg);color:var(--t
 <div id="app-shell">
   <!-- 앱바 -->
   <div id="appbar">
-    <h1>📊 리밸런서 <span id="app-ver" style="font-size:12px;font-weight:500;color:var(--t3);font-family:var(--mono)"></span><span id="cloud-badge" style="font-size:13px;margin-left:6px" title=""></span></h1>
+    <h1>📊 리밸런서 <span id="app-ver" style="font-size:max(10px, calc(12px * var(--fs)));font-weight:500;color:var(--t3);font-family:var(--mono)"></span><span id="cloud-badge" style="font-size:max(10px, calc(13px * var(--fs)));margin-left:6px" title=""></span></h1>
     <div class="spacer"></div>
     <div class="icon-btn" id="btn-refresh" onclick="refreshPrices()" title="시세 갱신">↻</div>
-    <div class="icon-btn" onclick="openFontSheet()" title="글자 크기" style="margin-left:4px" id="btn-font">
-      <span id="font-btn-label" style="font-size:8px;font-weight:700;letter-spacing:-.5px">가</span>
+    <div class="icon-btn" onclick="openFontSheet()" title="글자 설정" style="margin-left:4px" id="btn-font">
+      <span id="font-btn-label" style="font-size:max(10px, calc(11px * var(--fs)));font-weight:700;letter-spacing:-.5px">가</span>
     </div>
     <div class="icon-btn" onclick="openThemeSheet()" title="테마" style="margin-left:4px">
       🎨<div class="accent-dot" id="accent-dot"></div>
@@ -399,8 +403,8 @@ html,body{height:100%;font-family:var(--sans);background:var(--bg);color:var(--t
     <!-- 계좌 상세 (scroll-area 안에서 절대위치로 덮음) -->
     <div id="detail-panel">
       <div class="back-bar">
-        <span style="color:var(--accent);font-size:22px;font-weight:700;line-height:1">‹</span>
-        <span onclick="closeDetail()" style="font-size:16px;color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,transparent);border:1px solid color-mix(in srgb,var(--accent) 30%,transparent);padding:3px 10px;border-radius:7px;font-weight:600;cursor:pointer">뒤로</span>
+        <span style="color:var(--accent);font-size:calc(22px * var(--fs));font-weight:700;line-height:1">‹</span>
+        <span onclick="closeDetail()" style="font-size:calc(16px * var(--fs));color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,transparent);border:1px solid color-mix(in srgb,var(--accent) 30%,transparent);padding:3px 10px;border-radius:7px;font-weight:600;cursor:pointer">뒤로</span>
         <span class="back-lbl" id="detail-title">계좌 상세</span>
         <div class="spacer"></div>
         <span class="act-btn" id="detail-edit-btn" style="color:var(--accent);margin-right:6px">수정</span>
@@ -412,8 +416,8 @@ html,body{height:100%;font-family:var(--sans);background:var(--bg);color:var(--t
     <!-- 설정 (scroll-area 안에서 절대위치로 덮음) -->
     <div id="settings-panel">
       <div class="back-bar">
-        <span style="color:var(--accent);font-size:22px;font-weight:700;line-height:1">‹</span>
-        <span onclick="closeSettings()" style="font-size:16px;color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,transparent);border:1px solid color-mix(in srgb,var(--accent) 30%,transparent);padding:3px 10px;border-radius:7px;font-weight:600;cursor:pointer">뒤로</span>
+        <span style="color:var(--accent);font-size:calc(22px * var(--fs));font-weight:700;line-height:1">‹</span>
+        <span onclick="closeSettings()" style="font-size:calc(16px * var(--fs));color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,transparent);border:1px solid color-mix(in srgb,var(--accent) 30%,transparent);padding:3px 10px;border-radius:7px;font-weight:600;cursor:pointer">뒤로</span>
         <span class="back-lbl">KIS API 설정</span>
         <div class="spacer"></div>
         <span id="pin-change-btn" onclick="changePinFlow()" style="display:none;font-size:var(--f-xs);color:var(--t2);
@@ -476,7 +480,7 @@ const ACCENTS=[{n:'블루',h:'#4A90D9'},{n:'그린',h:'#2ECC7A'},{n:'퍼플',h:'
   {n:'오렌지',h:'#E8A020'},{n:'레드',h:'#E85555'},{n:'티파니',h:'#1EC8C8'}];
 const AC=['#4A90D9','#2ECC7A','#E8A020','#C06AF0','#E85555','#00BCD4','#FF6B9D','#8BC34A','#FF9800','#9C27B0'];
 const BROKERS=['한국투자증권','삼성증권','키움증권','미래에셋증권','NH투자증권','신한투자증권','KB증권','대신증권','기타'];
-const APP_VERSION='2.6.3';
+const APP_VERSION='2.7.0';
 const PROXY_MIN='2.3.0';   // 앱이 요구하는 최소 프록시 버전
 const KIS='http://localhost:5000';
 
@@ -519,7 +523,7 @@ let S={
   tab:0,selAcc:0,scope:'all',
   keySaved:false,editMode:false,
   detailIdx:-1,
-  fsKey:'normal',
+  fsPct:100,font:'noto',monoNum:true,
   sortDetail:{key:'name',asc:true},
   sortReb:{key:'name',asc:true},
   sortChart:{key:'pct',asc:false},
@@ -558,7 +562,11 @@ function load(){
     S.us10y=parseFloat(localStorage.getItem('rb2_us10y')||'0');
     S.isDark=(localStorage.getItem('rb2_theme')||'dark')==='dark';
     S.accent=parseInt(localStorage.getItem('rb2_accent')||'0');
-    S.fsKey=localStorage.getItem('rb2_fs')||'normal';
+    // 글자 크기(%) — 예전 4단계 설정(rb2_fs)이 있으면 그대로 옮김
+    const oldFs={small:85,normal:100,large:120,xlarge:140}[localStorage.getItem('rb2_fs')];
+    S.fsPct=parseInt(localStorage.getItem('rb2_fsp')||oldFs||100);
+    S.font=localStorage.getItem('rb2_font')||'noto';
+    S.monoNum=localStorage.getItem('rb2_mono')!=='0';
     S.keySaved=!!(localStorage.getItem('rb2_enc_k')&&localStorage.getItem('rb2_enc_s'));
     // 구버전이 남긴 평문 키: 암호화본이 있으면 삭제, 없으면 이번 세션 메모리로만 옮김
     const pk=localStorage.getItem('kis_app_key'),ps=localStorage.getItem('kis_app_secret');
@@ -705,7 +713,8 @@ async function kisToken(ak,as_){
   return d.access_token;
 }
 // 로그인 상태면 Supabase 서버(서울)를 통해 KIS 조회 → PC 프록시·키 입력 불필요
-function useCloudKis(){return !!(typeof sb!=='undefined'&&sb&&typeof _cloudUser!=='undefined'&&_cloudUser);}
+let _forceLocalKis=false;   // 로그인 상태에서 'PC 프록시 테스트'를 누른 경우
+function useCloudKis(){return !_forceLocalKis&&!!(typeof sb!=='undefined'&&sb&&typeof _cloudUser!=='undefined'&&_cloudUser);}
 async function cloudInvoke(body){
   const{data,error}=await sb.functions.invoke('kis-proxy',{body,headers:{'x-region':'ap-northeast-2'}});
   if(error){
@@ -989,17 +998,17 @@ function renderDash(){
   const cumAll=cumPrin>0?(cumTot-cumPrin)/cumPrin*100:null;
   let h=`
   <div class="hero">
-    <div style="font-size:16px;color:var(--t2)">총 포트폴리오 (${S.accounts.length}개 계좌)</div>
+    <div style="font-size:calc(16px * var(--fs));color:var(--t2)">총 포트폴리오 (${S.accounts.length}개 계좌)</div>
     <div class="hero-total">${tot>0?fn(tot)+'원':'시세 조회 필요'}</div>
-    ${tot>0?`<div style="font-size:16px;color:var(--t2)">KRX ${fn(krx)}원 | US ${fn(us)}원</div>`:''}
-    ${cumAll!=null?`<div style="font-size:15px;color:var(--t2);margin-top:4px">누적수익률 ${pctSpan(cumAll)} <span style="color:${cumTot>=cumPrin?'var(--buy)':'var(--sell)'};font-family:var(--mono)">(${cumTot>=cumPrin?'+':'-'}${fn(Math.round(Math.abs(cumTot-cumPrin)))}원)</span> <span style="font-size:12px;color:var(--t3)">· 원금 입력 ${cumN}개 계좌</span></div>`:''}
+    ${tot>0?`<div style="font-size:calc(16px * var(--fs));color:var(--t2)">KRX ${fn(krx)}원 | US ${fn(us)}원</div>`:''}
+    ${cumAll!=null?`<div style="font-size:calc(15px * var(--fs));color:var(--t2);margin-top:4px">누적수익률 ${pctSpan(cumAll)} <span style="color:${cumTot>=cumPrin?'var(--buy)':'var(--sell)'};font-family:var(--mono)">(${cumTot>=cumPrin?'+':'-'}${fn(Math.round(Math.abs(cumTot-cumPrin)))}원)</span> <span style="font-size:max(10px, calc(12px * var(--fs)));color:var(--t3)">· 원금 입력 ${cumN}개 계좌</span></div>`:''}
     <div class="kpi-row">
       <div class="kpi"><div class="kpi-l">KRX</div><div class="kpi-v">${S.accounts.filter(a=>a.market==='KRX').length}계좌</div></div>
       <div class="kpi"><div class="kpi-l">US</div><div class="kpi-v">${S.accounts.filter(a=>a.market==='US').length}계좌</div></div>
       <div class="kpi"><div class="kpi-l">USD/KRW</div><div class="kpi-v">${fn(S.rate)}</div></div>
       ${S.oilPrice>0?`<div class="kpi"><div class="kpi-l">WTI</div><div class="kpi-v">$${fn(S.oilPrice,2)}</div></div>`:''}
       ${S.us10y>0?`<div class="kpi"><div class="kpi-l">미국채10Y</div><div class="kpi-v">${fn(S.us10y,2)}%</div></div>`:''}
-      <div class="kpi"><div class="kpi-l">갱신</div><div class="kpi-v" style="font-size:16px;">${ft(S.updated)}</div></div>
+      <div class="kpi"><div class="kpi-l">갱신</div><div class="kpi-v" style="font-size:calc(16px * var(--fs));">${ft(S.updated)}</div></div>
     </div>
   </div>`;
   const totalOver=S.accounts.reduce((s,a)=>s+devDetail(a).over,0);
@@ -1032,7 +1041,7 @@ function renderDash(){
             <div class="acc-dot" style="background:${color}"></div>
             <div class="acc-name">${acc.name}</div>
             <span class="mkt-badge ${acc.market==='KRX'?'mkt-krx':'mkt-us'}">${acc.market}</span>
-            <span style="color:var(--t3);font-size:13px;margin-left:6px">›</span>
+            <span style="color:var(--t3);font-size:max(10px, calc(13px * var(--fs)));margin-left:6px">›</span>
           </div>
 
           <!-- ── 3분할 본문 (모바일: 정보+도넛 / 범례 2줄) ── -->
@@ -1040,24 +1049,24 @@ function renderDash(){
 
             <!-- 좌: 계좌 정보 -->
             <div class="acc-info" style="flex:1;min-width:0;display:flex;flex-direction:column;gap:6px">
-              <div class="ai-amt" style="font-family:var(--mono);font-size:22px;font-weight:700;color:var(--t1);line-height:1.2;white-space:nowrap">
+              <div class="ai-amt" style="font-family:var(--mono);font-size:calc(22px * var(--fs));font-weight:700;color:var(--t1);line-height:1.2;white-space:nowrap">
                 ${acc.market==='KRX'?fn(v)+'원':'$'+fn(v,2)}
               </div>
               ${(()=>{const pf=accPerf(acc);
-                if(pf.cumPct!=null)return`<div class="ai-pf" style="font-size:15px;color:var(--t2)">누적 ${pctSpan(pf.cumPct)}</div>`;
-                if(pf.evalPct!=null)return`<div class="ai-pf" style="font-size:15px;color:var(--t2)">평가 ${pctSpan(pf.evalPct)}</div>`;
+                if(pf.cumPct!=null)return`<div class="ai-pf" style="font-size:calc(15px * var(--fs));color:var(--t2)">누적 ${pctSpan(pf.cumPct)}</div>`;
+                if(pf.evalPct!=null)return`<div class="ai-pf" style="font-size:calc(15px * var(--fs));color:var(--t2)">평가 ${pctSpan(pf.evalPct)}</div>`;
                 return'';})()}
               <div style="display:flex;flex-direction:column;gap:3px">
-                <span class="ai-sub" style="font-size:17px;color:var(--t2)">${acc.stocks.length}종목</span>
-                <span class="ai-sub" style="font-size:17px;color:var(--t2)">${acc.broker}</span>
+                <span class="ai-sub" style="font-size:calc(17px * var(--fs));color:var(--t2)">${acc.stocks.length}종목</span>
+                <span class="ai-sub" style="font-size:calc(17px * var(--fs));color:var(--t2)">${acc.broker}</span>
               </div>
               <div style="margin-top:2px">
                 ${hasIssue
-                  ? `${dd.over>0?`<span class="tag" style="font-size:17px;background:rgba(232,85,85,.12);border:1px solid rgba(232,85,85,.3);color:var(--sell)">↑ 초과 ${dd.over}</span>`:''}
-                     ${dd.under>0?`<span class="tag" style="font-size:17px;background:rgba(232,160,32,.12);border:1px solid rgba(232,160,32,.3);color:var(--warn)">↓ 부족 ${dd.under}</span>`:''}`
+                  ? `${dd.over>0?`<span class="tag" style="font-size:calc(17px * var(--fs));background:rgba(232,85,85,.12);border:1px solid rgba(232,85,85,.3);color:var(--sell)">↑ 초과 ${dd.over}</span>`:''}
+                     ${dd.under>0?`<span class="tag" style="font-size:calc(17px * var(--fs));background:rgba(232,160,32,.12);border:1px solid rgba(232,160,32,.3);color:var(--warn)">↓ 부족 ${dd.under}</span>`:''}`
                   : acc.stocks.some(s=>!s.loaded)
-                    ? `<span class="tag" style="font-size:17px;background:var(--s2);border:1px solid var(--bd);color:var(--t3)">시세 미조회</span>`
-                    : `<span class="tag tag-ok" style="font-size:17px">✓ 균형</span>`}
+                    ? `<span class="tag" style="font-size:calc(17px * var(--fs));background:var(--s2);border:1px solid var(--bd);color:var(--t3)">시세 미조회</span>`
+                    : `<span class="tag tag-ok" style="font-size:calc(17px * var(--fs))">✓ 균형</span>`}
               </div>
             </div>
 
@@ -1065,7 +1074,7 @@ function renderDash(){
             <div class="acc-donut" style="flex:0 0 auto;display:flex;justify-content:center;align-items:center;padding:0 8px">
               <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
                 <svg id="donut-${i}" viewBox="0 0 100 100" width="216" height="216" style="overflow:hidden"></svg>
-                <div class="donut-cap" style="font-size:12px;color:var(--t3);white-space:nowrap">바깥 목표 · 안쪽 현재 · 눌러서 확인</div>
+                <div class="donut-cap" style="font-size:max(10px, calc(12px * var(--fs)));color:var(--t3);text-align:center;line-height:1.3;max-width:216px">바깥 목표 · 안쪽 현재 · 눌러서 확인</div>
               </div>
             </div>
 
@@ -1077,7 +1086,7 @@ function renderDash(){
                   const labels={order:'그래프순',name:'종목명',tgt:'비중',val:'매입금액'};
                   const active=S.sortDash.key===k;
                   const arrow=active&&k!=='order'?(S.sortDash.asc?'▲':'▼'):'';
-                  return`<button onclick="event.stopPropagation();setDashSort('${k}')" style="padding:2px 8px;border-radius:10px;font-size:13px;cursor:pointer;font-family:var(--sans);
+                  return`<button onclick="event.stopPropagation();setDashSort('${k}')" style="padding:2px 8px;border-radius:10px;font-size:max(10px, calc(13px * var(--fs)));cursor:pointer;font-family:var(--sans);
                     background:${active?'color-mix(in srgb,var(--accent) 15%,transparent)':'var(--s2)'};
                     border:1px solid ${active?'var(--accent)':'var(--bd)'};
                     color:${active?'var(--accent)':'var(--t2)'};font-weight:${active?700:500}">${labels[k]} ${arrow}</button>`;
@@ -1104,11 +1113,11 @@ function renderDash(){
                   return`<div class="lg-row" data-acc="${i}" data-k="${sk}" onmouseenter="donutFocus(${i},${sk})" onmouseleave="donutFocus(${i},null)"
                     onclick="event.stopPropagation();donutTap(${i},${sk})" style="display:flex;align-items:center;gap:5px;cursor:pointer;border-radius:6px;padding:1px 4px;margin:0 -4px;transition:opacity .15s,background .15s">
                   <div style="width:10px;height:10px;border-radius:50%;background:${baseCol};flex-shrink:0"></div>
-                  <div class="lg-name" style="font-size:17px;color:var(--t2);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${st.name||st.ticker}</div>
+                  <div class="lg-name" style="font-size:calc(17px * var(--fs));color:var(--t2);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${st.name||st.ticker}</div>
                   <div style="display:flex;align-items:center;gap:4px;flex-shrink:0">
-                    <span style="font-size:13px;font-family:DM Mono;color:var(--accent);font-weight:500">${st.tgt}%</span>
-                    <span style="font-size:11px;color:var(--t3)">→</span>
-                    <span class="lg-cur" style="font-size:17px;font-family:DM Mono;color:${baseCol};font-weight:700">${curW.toFixed(1)}%</span>
+                    <span style="font-size:max(10px, calc(13px * var(--fs)));font-family:DM Mono;color:var(--accent);font-weight:500">${st.tgt}%</span>
+                    <span style="font-size:max(10px, calc(11px * var(--fs)));color:var(--t3)">→</span>
+                    <span class="lg-cur" style="font-size:calc(17px * var(--fs));font-family:DM Mono;color:${baseCol};font-weight:700">${curW.toFixed(1)}%</span>
                   </div>
                 </div>`;
                 }).join('');
@@ -1276,7 +1285,7 @@ function renderDetailContent(idx){
     ${acc.market==='US'&&vk?`<div style="font-size:var(--f-xs);color:var(--t2)">≈ ${fn(vk)}원</div>`:''}
     ${acc.memo?`<div style="font-size:var(--f-xs);color:var(--t3);margin-top:5px">${acc.memo}</div>`:''}
     ${(()=>{const pf=accPerf(acc);
-      const cell=(l,v)=>`<div><div style="font-size:12px;color:var(--t3)">${l}</div><div style="font-size:var(--f-sm);font-family:var(--mono);font-weight:600">${v}</div></div>`;
+      const cell=(l,v)=>`<div><div style="font-size:max(10px, calc(12px * var(--fs)));color:var(--t3)">${l}</div><div style="font-size:var(--f-sm);font-family:var(--mono);font-weight:600">${v}</div></div>`;
       const plC=x=>x>0?'var(--buy)':x<0?'var(--sell)':'var(--t3)';
       let g='';
       if(pf.principal>0){
@@ -1295,7 +1304,7 @@ function renderDetailContent(idx){
       if(pf.noAvg>0)notes.push(`매입가 미입력 ${pf.noAvg}종목은 평가수익률에서 제외`);
       if(!pf.ready&&acc.stocks.length)notes.push('시세를 모두 조회해야 계산됩니다');
       return (g?`<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px 14px;margin-top:12px;padding-top:12px;border-top:1px solid ${color}30">${g}</div>`:'')
-        +(notes.length?`<div style="font-size:12px;color:var(--t3);margin-top:8px;line-height:1.5">${notes.join('<br>')}</div>`:'');
+        +(notes.length?`<div style="font-size:max(10px, calc(12px * var(--fs)));color:var(--t3);margin-top:8px;line-height:1.5">${notes.join('<br>')}</div>`:'');
     })()}
   </div>`;
 
@@ -1313,9 +1322,9 @@ function renderDetailContent(idx){
       <!-- 토글 헤더 -->
       <div style="display:flex;align-items:center;padding:10px 14px;background:var(--s1);gap:10px;cursor:pointer"
         onclick="S.detailBudget.mode=!S.detailBudget.mode;renderDetailContent(${idx})">
-        <span style="font-size:15px">💰</span>
+        <span style="font-size:calc(15px * var(--fs))">💰</span>
         <span style="font-size:var(--f-sm);font-weight:600;flex:1">총투자금액으로 리밸런싱</span>
-        <span style="font-size:15px;color:var(--accent);font-weight:700">${db.mode?'▲':'▼'}</span>
+        <span style="font-size:calc(15px * var(--fs));color:var(--accent);font-weight:700">${db.mode?'▲':'▼'}</span>
       </div>
       ${db.mode?`
       <div style="padding:12px 14px;border-top:1px solid var(--bd);background:var(--bg)">
@@ -1471,7 +1480,7 @@ function renderDetailContent(idx){
           let content='';
           if(c.key==='price')    content=`<div style="font-family:var(--mono);font-size:var(--f-xs);font-weight:600;color:${priceColor}">${priceStr}</div>`;
           if(c.key==='avgPrice') content=`<div style="font-family:var(--mono);font-size:var(--f-xs);color:var(--t2)">${avgStr}</div>`;
-          if(c.key==='profitRate')content=`<div style="font-size:var(--f-sm);font-weight:700">${plStr}</div>${plPct!==null&&costVal>0?`<div style="font-size:15px;color:${plColor};font-family:var(--mono)">${plKrw>=0?'+':''}${fn(Math.round(plKrw))}원</div>`:''}`;
+          if(c.key==='profitRate')content=`<div style="font-size:var(--f-sm);font-weight:700">${plStr}</div>${plPct!==null&&costVal>0?`<div style="font-size:calc(15px * var(--fs));color:${plColor};font-family:var(--mono)">${plKrw>=0?'+':''}${fn(Math.round(plKrw))}원</div>`:''}`;
           if(c.key==='costVal')  content=`<div style="font-family:var(--mono);font-size:var(--f-xs);color:var(--t2)">${costStr}</div>`;
           if(c.key==='evalVal')  content=`<div style="font-family:var(--mono);font-size:var(--f-xs);font-weight:600;color:var(--t1)">${evalStr}</div>`;
           if(c.key==='holdPct')  content=`<div style="font-family:var(--mono);font-size:var(--f-sm);font-weight:600;color:var(--accent)">${holdStr}</div>`;
@@ -1486,7 +1495,7 @@ function renderDetailContent(idx){
             <div style="flex:1;height:13px;background:var(--s2);border-radius:3px;overflow:hidden">
               <div style="width:${st.tgt}%;height:100%;background:${tgtColor};border:1px solid ${tgtBorder};border-radius:3px;box-sizing:border-box"></div>
             </div>
-            <span style="width:44px;text-align:right;font-size:var(--f-sm);color:var(--accent);font-family:var(--mono);font-weight:600">${st.tgt}%</span>
+            <span style="min-width:calc(44px * var(--fs));white-space:nowrap;text-align:right;font-size:var(--f-sm);color:var(--accent);font-family:var(--mono);font-weight:600">${st.tgt}%</span>
           </div>
           <div style="display:flex;align-items:center;gap:8px">
             <div style="flex:1;height:13px;background:var(--s2);border-radius:3px;overflow:hidden">
@@ -1494,7 +1503,7 @@ function renderDetailContent(idx){
                 ?`<div style="width:${Math.min(cw,100)}%;height:100%;background:${curColor};border-radius:3px;transition:width .4s ease"></div>`
                 :`<div style="width:100%;height:100%;background:repeating-linear-gradient(90deg,var(--s3) 0,var(--s3) 4px,transparent 4px,transparent 8px)"></div>`}
             </div>
-            <span style="width:44px;text-align:right;font-size:var(--f-sm);color:${curColor};font-family:var(--mono);font-weight:600">${isLoaded?cw.toFixed(1)+'%':'?'}</span>
+            <span style="min-width:calc(44px * var(--fs));white-space:nowrap;text-align:right;font-size:var(--f-sm);color:${curColor};font-family:var(--mono);font-weight:600">${isLoaded?cw.toFixed(1)+'%':'?'}</span>
           </div>
           ${isLoaded?`<div style="text-align:right;margin-top:2px">
             <span style="font-size:var(--f-sm);color:${curColor};font-family:var(--mono);font-weight:700">${diff>=0?'+':''}${diff.toFixed(1)}%</span>
@@ -1543,14 +1552,14 @@ function renderRebBody(){
   const body=document.getElementById('reb-body');
   let h=`<div class="status-bar">
     <span style="font-size:var(--f-xs);color:var(--t3);font-family:var(--mono)">갱신: ${ft(S.updated)} · USD ${fn(S.rate)}</span>
-    ${dv>0?`<span class="tag tag-warn" style="font-size:15px">⚠ ${dv}종목</span>`:''}
-    <button class="refresh-btn" style="font-size:15px" onclick="refreshPrices()">↻ 갱신</button>
+    ${dv>0?`<span class="tag tag-warn" style="font-size:calc(15px * var(--fs))">⚠ ${dv}종목</span>`:''}
+    <button class="refresh-btn" style="font-size:calc(15px * var(--fs))" onclick="refreshPrices()">↻ 갱신</button>
   </div>`;
   if(!loaded||!accReady(acc)){
     const miss=loaded?`<p style="font-size:var(--f-xs);color:var(--t3);margin-top:6px">미조회: ${missingTickers(acc).join(', ')}</p>`:'';
     h+=`<div class="empty" style="padding:40px 20px"><div class="ei">📡</div><p>${loaded?'일부 종목 시세가 없어 계산할 수 없습니다':'시세를 조회해야 계산됩니다'}</p>${miss}
       <button onclick="refreshPrices()" style="margin-top:14px;padding:10px 24px;background:var(--accent);border:none;
-        border-radius:9px;color:#fff;font-size:10px;cursor:pointer">시세 조회</button></div>`;
+        border-radius:9px;color:#fff;font-size:max(10px, calc(11px * var(--fs)));cursor:pointer">시세 조회</button></div>`;
     body.innerHTML=h;return;
   }
   const buyT=actions.filter(a=>!isHold(a)&&a.dLocal>0).reduce((s,a)=>s+actAmt(a),0);
@@ -1571,9 +1580,9 @@ function renderRebBody(){
     <!-- 모드 토글 헤더 -->
     <div style="display:flex;align-items:center;padding:10px 14px;background:var(--s1);gap:10px;cursor:pointer"
       onclick="S.budgetMode=!S.budgetMode;renderRebBody()">
-      <span style="font-size:11px">💰</span>
+      <span style="font-size:max(10px, calc(11px * var(--fs)))">💰</span>
       <span style="font-size:var(--f-sm);font-weight:600;flex:1">총투자금액으로 리밸런싱</span>
-      <span style="font-size:15px;color:var(--accent);font-weight:700">${budgetMode?'▲':'▼'}</span>
+      <span style="font-size:calc(15px * var(--fs));color:var(--accent);font-weight:700">${budgetMode?'▲':'▼'}</span>
     </div>
     <!-- 입력 패널 -->
     ${budgetMode?`<div style="padding:12px 14px;border-top:1px solid var(--bd);background:var(--bg)">
@@ -1606,7 +1615,7 @@ function renderRebBody(){
   </div>`;
   h+=`<div id="reb-result-wrap"></div>
   <div class="broker-card">
-    <span style="font-size:19px">🏦</span>
+    <span style="font-size:calc(19px * var(--fs))">🏦</span>
     <div style="flex:1"><div style="font-size:var(--f-sm);font-weight:600">${acc.broker}</div>
       <div style="font-size:var(--f-xs);color:var(--t2)">증권사 앱에서 직접 매매하세요</div></div>
     <span style="color:var(--t3)">›</span>
@@ -1642,7 +1651,7 @@ function updateRebResult(){
         border:1px solid ${active?'var(--accent)':'var(--bd)'};
         color:${active?'var(--accent)':'var(--t2)'};font-weight:${active?700:500}">${labels[k]} ${arrow}</button>`;
     }).join('')}
-    <span style="font-size:17px;color:var(--t3);align-self:center">임계값 ±${acc.thr||5}%</span>
+    <span style="font-size:calc(17px * var(--fs));color:var(--t3);align-self:center">임계값 ±${acc.thr||5}%</span>
   </div>`;
 
   // 정렬 적용
@@ -1824,11 +1833,11 @@ function renderChart(){
       onclick="S.chartAccFilter=S.chartAccFilter==='${a.name}'?'all':'${a.name}';renderChart()">
       <div style="width:10px;height:10px;border-radius:50%;background:${c};flex-shrink:0"></div>
       <div style="flex:1">
-        <div style="font-size:17px">${a.name}</div>
-        <div style="font-size:15px;color:var(--t3)">${a.broker} · ${a.market}</div>
+        <div style="font-size:calc(17px * var(--fs))">${a.name}</div>
+        <div style="font-size:calc(15px * var(--fs));color:var(--t3)">${a.broker} · ${a.market}</div>
       </div>
       <div style="font-family:var(--mono);font-size:var(--f-sm);font-weight:600;color:${c}">${displayVal>0?fn(displayVal)+'원':'-'}</div>
-      ${S.chartAccFilter===a.name?`<div style="color:var(--accent);font-size:11px">◀</div>`:''}
+      ${S.chartAccFilter===a.name?`<div style="color:var(--accent);font-size:max(10px, calc(11px * var(--fs)))">◀</div>`:''}
     </div>`;
   }).join('');
 
@@ -1849,7 +1858,7 @@ function renderChart(){
       ${S.chartAccFilter==='all'?'전체 합산':S.chartAccFilter}
     </span>
     ${S.chartAccFilter!=='all'?`<button onclick="S.chartAccFilter='all';renderChart()"
-      style="font-size:11px;color:var(--t3);background:none;border:none;cursor:pointer">✕</button>`:''}
+      style="font-size:max(10px, calc(11px * var(--fs)));color:var(--t3);background:none;border:none;cursor:pointer">✕</button>`:''}
     <div style="flex:1"></div>
     <button onclick="addManualSnapshot()"
       style="font-size:var(--f-xs);padding:3px 10px;border-radius:10px;
@@ -1988,7 +1997,7 @@ function openAccSheet(editIdx){
       <div class="row" style="gap:8px">${AC.map((c,i)=>`
         <div class="csw${(acc?.ci??0)===i?' active':''}" id="cs${i}"
           style="background:${c};${(acc?.ci??0)===i?`box-shadow:0 0 10px ${c}80`:''}"
-          onclick="selCI(${i})">${(acc?.ci??0)===i?'<span style="color:#fff;font-size:10px">✓</span>':''}</div>`).join('')}
+          onclick="selCI(${i})">${(acc?.ci??0)===i?'<span style="color:#fff;font-size:max(10px, calc(11px * var(--fs)))">✓</span>':''}</div>`).join('')}
       </div>
     </div>
     <div style="margin-bottom:13px">
@@ -2008,7 +2017,7 @@ function openAccSheet(editIdx){
       <div class="field"><label>납입원금</label><input id="f-ap" inputmode="decimal" value="${acc?.principal?fn(acc.principal,2).replace(/\.00$/,''):''}" placeholder="지금까지 넣은 돈"></div>
       <div class="field"><label>예수금</label><input id="f-ac" inputmode="decimal" value="${acc?.cash?fn(acc.cash,2).replace(/\.00$/,''):''}" placeholder="계좌의 현금"></div>
     </div>
-    <div style="font-size:12px;color:var(--t3);margin:-4px 2px 10px;line-height:1.5">누적수익률 계산용 (선택) · KRX 계좌는 원, US 계좌는 달러($)로 입력</div>
+    <div style="font-size:max(10px, calc(12px * var(--fs)));color:var(--t3);margin:-4px 2px 10px;line-height:1.5">누적수익률 계산용 (선택) · KRX 계좌는 원, US 계좌는 달러($)로 입력</div>
     <div class="sheet-btns">
       <button class="btn-ghost" onclick="closeMBg('modal-account')">취소</button>
       <button class="btn-primary" onclick="saveAcc()">저장</button>
@@ -2022,7 +2031,7 @@ function selCI(i){
     const sel=j===i;
     el.classList.toggle('active',sel);
     el.style.boxShadow=sel?`0 0 10px ${c}80`:'';
-    el.innerHTML=sel?'<span style="color:#fff;font-size:10px">✓</span>':'';
+    el.innerHTML=sel?'<span style="color:#fff;font-size:max(10px, calc(11px * var(--fs)))">✓</span>':'';
   });
 }
 function selMkt(m){
@@ -2071,7 +2080,7 @@ function openStockSheet(accIdx,stIdx){
       <div class="field"><label>보유 수량</label><input id="f-sq" type="number" value="${st?.quantity??''}" placeholder="0" step="0.001"></div>
       <div class="field"><label>목표 비중 (%)</label><input id="f-sw" type="number" value="${st?.tgt??''}" placeholder="0" step="0.1"></div>
     </div>
-    <div class="field"><label>매입가 ${isKrx?'(원)':'(USD)'} <span style="font-size:11px;color:var(--t3)">선택 — 수익률 계산에 사용</span></label>
+    <div class="field"><label>매입가 ${isKrx?'(원)':'(USD)'} <span style="font-size:max(10px, calc(11px * var(--fs)));color:var(--t3)">선택 — 수익률 계산에 사용</span></label>
       <input id="f-savg" type="number" value="${st?.avgPrice??''}" placeholder="${isKrx?'예: 75000':'예: 182.50'}" step="${isKrx?'1':'0.01'}">
     </div>
     ${isKrx?`<div class="crypto-note">💡 코스피: 숫자만 (.KS 자동) · 코스닥: .KQ 직접 입력</div>`:''}
@@ -2105,113 +2114,124 @@ function delSt(accIdx,stIdx){
 }
 
 /* ════════════════════════ 테마 ════════════════════════ */
-const FS_MAP={small:0.85,normal:1,large:1.2,xlarge:1.4};
-const FS_LABELS={small:'작게',normal:'보통',large:'크게',xlarge:'매우 크게'};
+// 글꼴 목록 — 기본(Noto Sans KR) 외에는 고를 때만 불러옴
+const FONTS={
+  noto:{n:'Noto Sans KR',d:'기본',css:"'Noto Sans KR',sans-serif"},
+  pretendard:{n:'Pretendard',d:'깔끔한 고딕',css:"'Pretendard Variable',Pretendard,sans-serif",
+    href:'https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css'},
+  nanum:{n:'나눔고딕',d:'익숙한 고딕',css:"'Nanum Gothic',sans-serif",
+    href:'https://fonts.googleapis.com/css2?family=Nanum+Gothic:wght@400;700;800&display=swap'},
+  plex:{n:'IBM Plex Sans KR',d:'단정한 고딕',css:"'IBM Plex Sans KR',sans-serif",
+    href:'https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap'},
+  gowun:{n:'고운돋움',d:'부드러운 글씨',css:"'Gowun Dodum',sans-serif",
+    href:'https://fonts.googleapis.com/css2?family=Gowun+Dodum&display=swap'},
+  system:{n:'시스템 글꼴',d:'맑은 고딕 등 기기 기본',css:"system-ui,-apple-system,'Malgun Gothic','Apple SD Gothic Neo',sans-serif"},
+};
+const FS_MIN=70,FS_MAX=160,FS_STEP=10;
+function loadFont(k){
+  const f=FONTS[k];if(!f||!f.href||document.getElementById('font-'+k))return;
+  const l=document.createElement('link');l.id='font-'+k;l.rel='stylesheet';l.href=f.href;document.head.appendChild(l);
+}
 function applyTheme(){
   document.body.setAttribute('data-theme',S.isDark?'dark':'light');
   const ah=ACCENTS[S.accent].h;
   document.documentElement.style.setProperty('--accent',ah);
-  document.documentElement.style.setProperty('--fs', FS_MAP[S.fsKey]||1);
+  const rs=document.documentElement.style;
+  if(!FONTS[S.font])S.font='noto';
+  S.fsPct=Math.min(FS_MAX,Math.max(FS_MIN,S.fsPct||100));
+  rs.setProperty('--fs', S.fsPct/100);
+  loadFont(S.font);
+  rs.setProperty('--sans', FONTS[S.font].css);
+  rs.setProperty('--mono', S.monoNum?"'DM Mono',monospace":FONTS[S.font].css);
   const dot=document.getElementById('accent-dot');
   if(dot)dot.style.background=ah;
   localStorage.setItem('rb2_theme',S.isDark?'dark':'light');
   localStorage.setItem('rb2_accent',S.accent);
-  localStorage.setItem('rb2_fs',S.fsKey);
+  localStorage.setItem('rb2_fsp',S.fsPct);
+  localStorage.setItem('rb2_font',S.font);
+  localStorage.setItem('rb2_mono',S.monoNum?'1':'0');
   updateFontBtnLabel();
   renderDonuts();
 }
 function updateFontBtnLabel(){
-  const labels={small:'가ₛ',normal:'가',large:'가ₗ',xlarge:'가ₓ'};
-  const sizes={small:'10px',normal:'12px',large:'14px',xlarge:'16px'};
   const el=document.getElementById('font-btn-label');
-  if(el){el.textContent=labels[S.fsKey]||'가';el.style.fontSize=sizes[S.fsKey]||'12px';}
+  if(el){el.textContent='가';el.style.fontSize=Math.round(10+(S.fsPct-FS_MIN)/(FS_MAX-FS_MIN)*8)+'px';}
+  const b=document.getElementById('btn-font');if(b)b.title=`글자 설정 (${S.fsPct}%)`;
 }
-function setFontSize(key){S.fsKey=key;applyTheme();updateFontBtnLabel();openFontSheet();}
+function setFsStep(d){
+  if(d===0)S.fsPct=100;else S.fsPct=Math.min(FS_MAX,Math.max(FS_MIN,S.fsPct+d*FS_STEP));
+  applyTheme();openFontSheet();
+}
+function setFont(k){S.font=k;applyTheme();openFontSheet();}
+function toggleMonoNum(){S.monoNum=!S.monoNum;applyTheme();openFontSheet();}
 function openFontSheet(){
-  // 폰트 전용 시트는 modal-theme를 재사용 (내용만 교체)
+  Object.keys(FONTS).forEach(loadFont);   // 미리보기용 (시트를 열 때만)
+  const pb=(label,fn,dis)=>`<button onclick="${fn}" ${dis?'disabled':''} style="width:48px;height:44px;border-radius:12px;border:1px solid var(--bd);
+    background:var(--s2);color:${dis?'var(--t3)':'var(--t1)'};font-size:calc(22px * var(--fs));font-weight:700;cursor:${dis?'default':'pointer'}">${label}</button>`;
   document.getElementById('sheet-theme').innerHTML=`
     <div class="sheet-handle" style="display:block"></div>
-    <h3 style="margin-bottom:18px">글자 크기</h3>
-    <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:8px">
-      ${Object.entries({small:'작게',normal:'보통',large:'크게',xlarge:'매우 크게'}).map(([k,label])=>{
-        const sizes={small:'13px',normal:'15px',large:'18px',xlarge:'21px'};
-        const sel=S.fsKey===k;
-        return`<div onclick="setFontSize('${k}')"
-          style="display:flex;align-items:center;gap:16px;padding:14px 16px;
-            border-radius:12px;cursor:pointer;transition:all .15s;
-            background:${sel?'color-mix(in srgb,var(--accent) 12%,transparent)':'var(--s2)'};
-            border:${sel?'1.5px solid var(--accent)':'1px solid var(--bd)'}">
-          <span style="font-size:${sizes[k]};font-weight:700;color:${sel?'var(--accent)':'var(--t1)'};
-            min-width:40px;text-align:center">가</span>
-          <div style="flex:1">
-            <div style="font-size:${sizes[k]};font-weight:600;
-              color:${sel?'var(--accent)':'var(--t1)'}">${label}</div>
-            <div style="font-size:9px;color:var(--t2);margin-top:2px">${sizes[k]} 기준</div>
-          ${sel?`<span style="color:var(--accent);font-size:15px">✓</span>`:''}
-        </div>`;
-      }).join('')}
-    </div>`;
-  document.getElementById('modal-theme').classList.add('open');
-}
-function openThemeSheet(){
-  document.getElementById('sheet-theme').innerHTML=`
-    <div class="sheet-handle"></div>
-    <h3>테마 설정</h3>
-    <div style="font-size:var(--f-sm);color:var(--t3);letter-spacing:1.1px;margin-bottom:10px">모드</div>
-    <div class="mode-row">
-      <div class="mode-btn${S.isDark?' active':''}" onclick="setMode(true)"><span class="mi">🌙</span><span class="ml">다크</span></div>
-      <div class="mode-btn${!S.isDark?' active':''}" onclick="setMode(false)"><span class="mi">☀️</span><span class="ml">라이트</span></div>
+    <h3 style="margin-bottom:14px">글자 설정</h3>
+    <div style="font-size:var(--f-sm);font-weight:700;color:var(--t2);margin-bottom:8px">크기</div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+      ${pb('−','setFsStep(-1)',S.fsPct<=FS_MIN)}
+      <div style="flex:1;text-align:center;font-family:var(--mono);font-size:calc(22px * var(--fs));font-weight:700;color:var(--accent)">${S.fsPct}%</div>
+      ${pb('+','setFsStep(1)',S.fsPct>=FS_MAX)}
+      <button onclick="setFsStep(0)" style="height:44px;padding:0 12px;border-radius:12px;border:1px solid var(--bd);background:none;color:var(--t2);font-size:var(--f-xs);cursor:pointer">기본</button>
     </div>
-    <div style="font-size:var(--f-sm);color:var(--t3);letter-spacing:1.1px;margin-bottom:12px">액센트 컬러</div>
-    <div class="clr-row">${ACCENTS.map((c,i)=>`
-      <div class="csw${S.accent===i?' active':''}" style="background:${c.h};${S.accent===i?`box-shadow:0 0 12px ${c.h}80`:''}"
-        onclick="setAccent(${i})">${S.accent===i?'<span style="color:#fff">✓</span>':''}</div>`).join('')}</div>
-    <div class="cnm-row">${ACCENTS.map((c,i)=>`
-      <div class="cnm" style="${S.accent===i?`color:${c.h};font-weight:700`:''}">${c.n}</div>`).join('')}</div>
-    <div class="preview">
-      <div class="pv-lbl">미리보기</div>
-      <div class="row" style="gap:6px;margin-bottom:8px">
-        <div style="width:8px;height:8px;border-radius:50%;background:var(--accent)"></div>
-        <span style="font-size:var(--f-sm);font-weight:700;color:var(--t1)">리밸런서</span>
-        <div class="spacer"></div>
-        <span style="color:var(--accent)">↻</span><span style="color:var(--t2);margin-left:6px">⚙</span>
+    <div style="padding:12px 14px;border-radius:12px;background:var(--s2);border:1px solid var(--bd);margin-bottom:18px">
+      <div style="font-size:var(--f-md);font-weight:700">연금저축펀드1</div>
+      <div style="font-family:var(--mono);font-size:var(--f-lg);font-weight:700;margin:2px 0">14,523,145원</div>
+      <div style="font-size:var(--f-sm);color:var(--t2)">누적 <span style="color:var(--buy);font-family:var(--mono);font-weight:700">+8.42%</span> · KODEX 200 매수 12주</div>
+    </div>
+    <div style="font-size:var(--f-sm);font-weight:700;color:var(--t2);margin-bottom:8px">글꼴</div>
+    <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px">
+      ${Object.entries(FONTS).map(([k,f])=>{const sel=S.font===k;
+        return`<div onclick="setFont('${k}')" style="display:flex;align-items:center;gap:12px;padding:11px 14px;border-radius:12px;cursor:pointer;
+          background:${sel?'color-mix(in srgb,var(--accent) 12%,transparent)':'var(--s2)'};border:${sel?'1.5px solid var(--accent)':'1px solid var(--bd)'}">
+          <span style="font-family:${f.css.replace(/"/g,'&quot;')};font-size:calc(20px * var(--fs));font-weight:700;min-width:34px;text-align:center;color:${sel?'var(--accent)':'var(--t1)'}">가</span>
+          <div style="flex:1;min-width:0">
+            <div style="font-family:${f.css.replace(/"/g,'&quot;')};font-size:var(--f-md);font-weight:600;color:${sel?'var(--accent)':'var(--t1)'}">${f.n}</div>
+            <div style="font-size:var(--f-xs);color:var(--t3)">${f.d}</div>
+          </div>
+          ${sel?'<span style="color:var(--accent);font-size:var(--f-md)">✓</span>':''}
+        </div>`;}).join('')}
+    </div>
+    <div onclick="toggleMonoNum()" style="display:flex;align-items:center;gap:10px;padding:11px 14px;border-radius:12px;cursor:pointer;background:var(--s2);border:1px solid var(--bd);margin-bottom:6px">
+      <div style="flex:1">
+        <div style="font-size:var(--f-sm);font-weight:600">숫자는 고정폭 글꼴 (DM Mono)</div>
+        <div style="font-size:var(--f-xs);color:var(--t3)">끄면 숫자도 위에서 고른 글꼴로 표시</div>
       </div>
-      <div style="background:var(--s1);border:1px solid var(--bd);border-radius:8px;padding:9px;margin-bottom:7px">
-        <div class="row" style="gap:8px">
-          <div style="width:8px;height:8px;border-radius:50%;background:var(--accent)"></div>
-          <div style="flex:1;font-size:var(--f-sm);font-weight:600">KRX — 배당주</div>
-          <span style="font-size:var(--f-sm);font-weight:700;color:var(--accent);font-family:var(--mono)">24,510,000원</span>
-        </div>
-      </div>
-      <div class="row" style="border-top:1px solid var(--bd);padding-top:6px">
-        ${['대시보드','차트'].map((t,i)=>`
-          <div style="flex:1;text-align:center;font-size:var(--f-sm);${i===0?`color:var(--accent);font-weight:700;border-bottom:1.5px solid var(--accent)`:''}">${t}</div>`).join('')}
+      <div style="width:42px;height:24px;border-radius:12px;background:${S.monoNum?'var(--accent)':'var(--bd2)'};position:relative;flex-shrink:0">
+        <div style="position:absolute;top:3px;left:${S.monoNum?21:3}px;width:18px;height:18px;border-radius:50%;background:#fff;transition:left .15s"></div>
       </div>
     </div>`;
   document.getElementById('modal-theme').classList.add('open');
 }
-function setMode(dark){S.isDark=dark;applyTheme();openThemeSheet();}
-function setAccent(i){S.accent=i;applyTheme();openThemeSheet();}
-
 /* ════════════════════════ 설정 ════════════════════════ */
 function openSettings(){
   renderSettingsContent();
   document.getElementById('settings-panel').classList.add('open');
   document.getElementById('settings-content').scrollTop=0;
-  document.getElementById('pin-change-btn').style.display=S.keySaved?'inline-block':'none';
+  document.getElementById('pin-change-btn').style.display=S.keySaved&&!useCloudKis()?'inline-block':'none';
 }
 function closeSettings(){document.getElementById('settings-panel').classList.remove('open');}
+let _keyOpen=false;   // 'PC 프록시용 키 설정' 펼침 상태
 function renderSettingsContent(){
   const saved=S.keySaved,em=S.editMode;
   const canEdit=saved&&!em,showSave=!saved||em;
   document.getElementById('settings-content').innerHTML=`
     ${cloudBoxHtml()}
-    ${useCloudKis()?`<div class="status-banner banner-saved"><div style="line-height:1.5">☁ 로그인 상태에서는 <b>서버에 등록된 KIS 키</b>로 시세를 조회합니다.<br>아래 키 입력은 로그아웃 상태(PC 프록시)에서만 필요합니다.</div></div>`:''}
-    ${useCloudKis()&&!saved?'':`<div class="status-banner ${saved?'banner-saved':'banner-unsaved'}">
-      ${saved?'🔐 API 키가 PIN으로 암호화 저장되어 있습니다':'⚠ API 키가 저장되지 않았습니다'}
-    </div>`}
+    ${useCloudKis()?`<div class="status-banner banner-saved"><div style="line-height:1.5">☁ 로그인 상태에서는 <b>서버에 등록된 KIS 키</b>로 시세를 조회합니다. 이 기기에 키를 넣을 필요가 없습니다.</div></div>
+    <div id="test-result-cloud"></div>
+    <div class="btn-row" style="margin-top:4px"><button class="btn-outline" style="flex:1" onclick="testConn()">☁ 클라우드 연결 테스트</button></div>
+    <details id="key-details" ${_keyOpen?'open':''} ontoggle="_keyOpen=this.open" style="margin:14px 12px 0;border:1px solid var(--bd);border-radius:10px;background:var(--s1)">
+      <summary style="padding:12px 14px;cursor:pointer;font-size:var(--f-sm);font-weight:600;color:var(--t2)">🔑 PC 프록시용 키 설정 <span style="font-weight:400;color:var(--t3);font-size:var(--f-xs)">· 로그아웃 상태에서만 사용${saved?' · 저장됨':''}</span></summary>
+      <div style="padding-bottom:12px">`:''}
+    <div class="status-banner ${saved?'banner-saved':'banner-unsaved'}">
+      ${saved?'🔐 API 키가 PIN으로 암호화 저장되어 있습니다':(useCloudKis()?'키가 저장되지 않았습니다 (로그인 상태에서는 필요 없음)':'⚠ API 키가 저장되지 않았습니다')}
+    </div>
     <div class="guide-box">
-      <div style="font-size:10px;font-weight:700;color:var(--accent)">🔑 KIS Developers 발급</div>
+      <div style="font-size:max(10px, calc(11px * var(--fs)));font-weight:700;color:var(--accent)">🔑 KIS Developers 발급</div>
       ${['apiportal.koreainvestment.com 접속','회원가입 → 로그인','[API 신청] → 계좌 연결','AppKey / AppSecret 복사'].map((s,i)=>`
         <div class="guide-step"><div class="snum">${i+1}</div><span style="font-size:var(--f-sm);color:var(--t2)">${s}</span></div>`).join('')}
     </div>
@@ -2232,12 +2252,15 @@ function renderSettingsContent(){
     </div>
     <div id="test-result"></div>
     <div class="btn-row" style="margin-top:14px">
-      <button class="btn-outline" onclick="testConn()">연결 테스트</button>
+      <button class="btn-outline" onclick="testConn(true)">${useCloudKis()?'PC 프록시 테스트':'연결 테스트'}</button>
       ${canEdit
         ?`<button class="btn-save" onclick="loadKeys()" style="background:var(--buy)">📂 불러오기</button>
           <button class="btn-save btn-edit" onclick="enterEdit()">✎ 수정</button>`
         :`<button class="btn-save" onclick="saveKeys()">💾 저장</button>`}
     </div>
+    ${useCloudKis()?`${saved?`<div style="padding:10px 12px 0"><button class="btn-outline" style="width:100%" onclick="changePinFlow()">🔒 PIN 변경</button></div>`:''}
+      </div>
+    </details>`:''}
     <div class="hr"></div>
     <div style="font-size:var(--f-sm);font-weight:700;color:var(--t1);padding:0 12px;margin-bottom:12px">💾 데이터 백업 / 복원</div>
     <div style="padding:0 12px;margin-bottom:10px">
@@ -2253,7 +2276,7 @@ function renderSettingsContent(){
       <div id="backup-status"></div>
     </div>
     <div class="hr"></div>
-    <div style="font-size:9px;font-weight:600;color:var(--t2);padding:0 12px;margin-bottom:10px">📋 API 호출 제한</div>
+    <div style="font-size:max(10px, calc(11px * var(--fs)));font-weight:600;color:var(--t2);padding:0 12px;margin-bottom:10px">📋 API 호출 제한</div>
     ${[['국내주식 현재가','초당 5회'],['해외주식 현재가','초당 1회'],['토큰 유효기간','24시간'],['이용료','무료']].map(([l,v])=>`
       <div class="info-row"><span>${l}</span><span>${v}</span></div>`).join('')}
     <div class="hr"></div>
@@ -2314,9 +2337,13 @@ async function changePinFlow(){
   localStorage.setItem('rb2_enc_k',ek);localStorage.setItem('rb2_enc_s',es);localStorage.setItem('rb2_pin_hash',ph);
   alert('✅ PIN이 변경되었습니다');
 }
-async function testConn(){
+async function testConn(local){
+  if(local&&useCloudKis()){   // 로그인 중이지만 PC 프록시로 시험
+    _forceLocalKis=true;
+    try{return await testConn();}finally{_forceLocalKis=false;}
+  }
   if(useCloudKis()){
-    const r=document.getElementById('test-result');
+    const r=document.getElementById('test-result-cloud')||document.getElementById('test-result');
     if(r)r.innerHTML='<div style="padding:8px 12px;color:var(--t2);font-size:var(--f-xs)">🔄 클라우드 확인 중...</div>';
     try{
       await cloudInvoke({ping:true});
@@ -2330,7 +2357,7 @@ async function testConn(){
   const as_=document.getElementById('f-as')?.value.trim();
   if(!ak||!as_||ak.startsWith('•')){alert('AppKey와 AppSecret을 입력하세요');return;}
   const r=document.getElementById('test-result');
-  r.innerHTML='<div style="padding:8px 12px;color:var(--t2);font-size:9px">🔄 확인 중...</div>';
+  r.innerHTML='<div style="padding:8px 12px;color:var(--t2);font-size:max(10px, calc(11px * var(--fs)))">🔄 확인 중...</div>';
   try{
     localStorage.removeItem('kis_tok');
     const tok=await kisToken(ak,as_);
