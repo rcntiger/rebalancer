@@ -480,7 +480,7 @@ const ACCENTS=[{n:'블루',h:'#4A90D9'},{n:'그린',h:'#2ECC7A'},{n:'퍼플',h:'
   {n:'오렌지',h:'#E8A020'},{n:'레드',h:'#E85555'},{n:'티파니',h:'#1EC8C8'}];
 const AC=['#4A90D9','#2ECC7A','#E8A020','#C06AF0','#E85555','#00BCD4','#FF6B9D','#8BC34A','#FF9800','#9C27B0'];
 const BROKERS=['한국투자증권','삼성증권','키움증권','미래에셋증권','NH투자증권','신한투자증권','KB증권','대신증권','기타'];
-const APP_VERSION='2.9.0';
+const APP_VERSION='2.10.0';
 const PROXY_MIN='2.3.0';   // 앱이 요구하는 최소 프록시 버전
 const KIS='http://localhost:5000';
 
@@ -999,12 +999,14 @@ function stW(acc,st){
   return v/t*100;
 }
 function devCnt(acc){
+  if(acc.noReb)return 0;
   return acc.stocks.filter(st=>st.loaded&&Math.abs(stW(acc,st)-st.tgt)>(acc.thr||5)).length;
 }
 function devDetail(acc){
   // 초과(over): 현재비중 > 목표비중+임계값
   // 부족(under): 현재비중 < 목표비중-임계값
   let over=0,under=0,unloaded=0;
+  if(acc.noReb)return{over,under,unloaded};
   acc.stocks.forEach(st=>{
     if(!st.loaded){unloaded++;return;}
     const diff=stW(acc,st)-st.tgt;
@@ -1018,6 +1020,7 @@ function devDetail(acc){
 const PERIODS=[[0,'사용 안 함'],[1,'매월'],[3,'분기 (3개월)'],[6,'반기 (6개월)'],[12,'1년']];
 function addMonths(ds,m){const d=new Date(ds+'T00:00:00');d.setMonth(d.getMonth()+m);return localDate(d);}
 function rebStatus(acc){
+  if(acc.noReb)return{period:0,due:null,isDue:false,out:0,need:false};
   const period=acc.period??3;
   const due=acc.lastReb&&period>0?addMonths(acc.lastReb,period):null;
   const isDue=!!due&&localDate()>=due;
@@ -1211,7 +1214,8 @@ function renderDash(){
                 <span class="ai-sub" style="font-size:calc(17px * var(--fs));color:var(--t2)">${acc.broker}</span>
               </div>
               <div style="margin-top:2px">
-                ${hasIssue
+                ${acc.noReb?`<span class="tag" style="font-size:calc(17px * var(--fs));background:var(--s2);border:1px solid var(--bd);color:var(--t2)">📋 보유관리</span>`
+                : hasIssue
                   ? `${dd.over>0?`<span class="tag" style="font-size:calc(17px * var(--fs));background:rgba(232,85,85,.12);border:1px solid rgba(232,85,85,.3);color:var(--sell)">↑ 초과 ${dd.over}</span>`:''}
                      ${dd.under>0?`<span class="tag" style="font-size:calc(17px * var(--fs));background:rgba(232,160,32,.12);border:1px solid rgba(232,160,32,.3);color:var(--warn)">↓ 부족 ${dd.under}</span>`:''}`
                   : acc.stocks.some(s=>!s.loaded)
@@ -1225,7 +1229,7 @@ function renderDash(){
             <div class="acc-donut" style="flex:0 0 auto;display:flex;justify-content:center;align-items:center;padding:0 8px">
               <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
                 <svg id="donut-${i}" viewBox="0 0 100 100" width="216" height="216" style="overflow:hidden"></svg>
-                <div class="donut-cap" style="font-size:max(10px, calc(12px * var(--fs)));color:var(--t3);text-align:center;line-height:1.3;max-width:216px">바깥 목표 · 안쪽 현재 · 눌러서 확인</div>
+                <div class="donut-cap" style="font-size:max(10px, calc(12px * var(--fs)));color:var(--t3);text-align:center;line-height:1.3;max-width:216px">${acc.noReb?'보유 비중 · 눌러서 확인':'바깥 목표 · 안쪽 현재 · 눌러서 확인'}</div>
               </div>
             </div>
 
@@ -1249,15 +1253,15 @@ function renderDash(){
                 const sorted=[...acc.stocks].sort((a,b)=>{
                   if(sd.key==='order')return acc.stocks.indexOf(a)-acc.stocks.indexOf(b);
                   if(sd.key==='name'){const va=a.name||a.ticker,vb=b.name||b.ticker;return sd.asc?va.localeCompare(vb):vb.localeCompare(va);}
-                  if(sd.key==='tgt'){return sd.asc?a.tgt-b.tgt:b.tgt-a.tgt;}
+                  if(sd.key==='tgt'){if(acc.noReb&&anyLoaded){const va=stW(acc,a),vb=stW(acc,b);return sd.asc?va-vb:vb-va;}return sd.asc?a.tgt-b.tgt:b.tgt-a.tgt;}
                   if(sd.key==='val'){const va=(a.quantity||0)*(a.price||0),vb=(b.quantity||0)*(b.price||0);return sd.asc?va-vb:vb-va;}
                   return 0;
                 });
                 let shown=0;
                 return sorted.map((st)=>{
                   if(shown>=6)return'';
-                  const curW=anyLoaded?stW(acc,st):st.tgt;
-                  if(curW<=0&&!(st.tgt>0))return'';   // 목표 비중이 있으면 미보유(0주)여도 표시
+                  const curW=anyLoaded?stW(acc,st):(acc.noReb?0:st.tgt);
+                  if(curW<=0&&!(st.tgt>0&&!acc.noReb)&&!(acc.noReb&&!anyLoaded))return'';   // 목표 비중이 있으면 미보유(0주)여도 표시
                   shown++;
                   const baseCol=stockBaseColor(acc,st);
                   const sk=acc.stocks.indexOf(st);
@@ -1266,14 +1270,14 @@ function renderDash(){
                   <div style="width:10px;height:10px;border-radius:50%;background:${baseCol};flex-shrink:0"></div>
                   <div class="lg-name" style="font-size:calc(17px * var(--fs));color:var(--t2);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${st.name||st.ticker}</div>
                   <div style="display:flex;align-items:center;gap:4px;flex-shrink:0">
-                    <span style="font-size:max(10px, calc(13px * var(--fs)));font-family:DM Mono;color:var(--accent);font-weight:500">${st.tgt}%</span>
-                    <span style="font-size:max(10px, calc(11px * var(--fs)));color:var(--t3)">→</span>
-                    <span class="lg-cur" style="font-size:calc(17px * var(--fs));font-family:DM Mono;color:${baseCol};font-weight:700">${curW.toFixed(1)}%</span>
+                    ${acc.noReb?'':`<span style="font-size:max(10px, calc(13px * var(--fs)));font-family:DM Mono;color:var(--accent);font-weight:500">${st.tgt}%</span>
+                    <span style="font-size:max(10px, calc(11px * var(--fs)));color:var(--t3)">→</span>`}
+                    <span class="lg-cur" style="font-size:calc(17px * var(--fs));font-family:DM Mono;color:${baseCol};font-weight:700">${anyLoaded?curW.toFixed(1)+'%':'?'}</span>
                   </div>
                 </div>`;
                 }).join('');
               })()}
-              ${(()=>{const anyL=acc.stocks.some(s=>s.loaded);const n=acc.stocks.filter(st=>st.tgt>0||(anyL&&stW(acc,st)>0)).length;
+              ${(()=>{const anyL=acc.stocks.some(s=>s.loaded);const n=acc.noReb?(anyL?acc.stocks.filter(st=>stW(acc,st)>0).length:acc.stocks.length):acc.stocks.filter(st=>st.tgt>0||(anyL&&stW(acc,st)>0)).length;
                 return n>6?`<div style="font-size:var(--f-xs);color:var(--t3);margin-top:1px">+${n-6}개 더 (계좌 상세에서 확인)</div>`:'';})()}
             </div>
 
@@ -1335,9 +1339,12 @@ function renderDonuts(){
       c.setAttribute('cx',cx);c.setAttribute('cy',cy);c.setAttribute('r',(rO+rI)/2);c.setAttribute('fill','none');
       c.setAttribute('stroke',S.isDark?'#2a3a4a':'#D5DEEA');c.setAttribute('stroke-width',rO-rI);g.appendChild(c);};
     // 바깥 링: 목표 비중 (보유하지 않은 종목 포함 전 종목)
+    if(acc.noReb){ if(!(anyLoaded&&ring(r,ir,st=>stW(acc,st))))blank(r,ir); }
+    else{
     if(!ring(r,31,st=>st.tgt||0))blank(r,31);
     // 안쪽 링: 현재 비중 (시세 조회 후, 보유 종목만)
     if(!(anyLoaded&&ring(29.5,ir,st=>stW(acc,st))))blank(29.5,ir);
+    }
     svg.appendChild(g);
     // 도넛 구멍
     const hole=document.createElementNS(NS,'circle');
@@ -1464,12 +1471,12 @@ function renderDetailContent(idx){
   </div>`;
 
   if(acc.stocks.some(s=>s.loaded)&&!accReady(acc))
-    h+=`<div class="alert alert-warn" style="margin:4px 12px">시세 미조회: ${missingTickers(acc).join(', ')} — 리밸런싱 계산을 멈췄습니다</div>`;
-  if(tw!==100&&acc.stocks.length)
+    h+=`<div class="alert alert-warn" style="margin:4px 12px">시세 미조회: ${missingTickers(acc).join(', ')}${acc.noReb?'':' — 리밸런싱 계산을 멈췄습니다'}</div>`;
+  if(!acc.noReb&&tw!==100&&acc.stocks.length)
     h+=`<div class="alert alert-warn" style="margin:4px 12px">목표 비중 합계 ${tw.toFixed(1)}% (${tw>100?'초과':'부족'} ${Math.abs(100-tw).toFixed(1)}%)</div>`;
 
   // ── 정기 점검 ──────────────────────────────────
-  {
+  if(!acc.noReb){
     const r=rebStatus(acc),full=fullRebFor(acc);
     const fmt=d=>d?d.replace(/-/g,'.'):'';
     const chip=(on,label,fn)=>`<button onclick="${fn}" style="padding:5px 12px;border-radius:14px;font-size:var(--f-xs);cursor:pointer;font-weight:${on?700:500};
@@ -1496,7 +1503,7 @@ function renderDetailContent(idx){
   }
 
   // ── 총투자금액 리밸런싱 패널 (종목 목록 위) ──────
-  if(priceLoaded){
+  if(priceLoaded&&!acc.noReb){
     const buyT=budgetActions.filter(a=>!isHold(a)&&a.dLocal>0).reduce((s,a)=>s+actAmt(a),0);
     const selT=budgetActions.filter(a=>!isHold(a)&&a.dLocal<0).reduce((s,a)=>s+actAmt(a),0);
     const adjN=budgetActions.filter(a=>!isHold(a)).length;
@@ -1550,7 +1557,7 @@ function renderDetailContent(idx){
     <div style="flex:1"></div>
     <button onclick="openColSheet()" style="font-size:var(--f-xs);padding:2px 10px;border-radius:10px;
       background:var(--s2);border:1px solid var(--bd);color:var(--t2);cursor:pointer;margin-right:6px">⚙ 컬럼</button>
-    <span style="font-size:var(--f-sm);color:var(--t3);font-weight:500">임계값 ±${thr}%</span>
+    ${acc.noReb?'':`<span style="font-size:var(--f-sm);color:var(--t3);font-weight:500">임계값 ±${thr}%</span>`}
   </div>`;
 
   // ── 컬럼 헤더 ────────────────────────────────────
@@ -1574,10 +1581,10 @@ function renderDetailContent(idx){
     ${activeCols.map(c=>`
       <div class="dt-num" style="flex:1;text-align:right;font-size:var(--f-xs);color:var(--t2);font-weight:500;cursor:pointer;user-select:none;min-width:60px;white-space:nowrap"
         onclick="setDetailSort('${c.sort}')">${c.label} ${sdArrow(c.sort)}</div>`).join('')}
-    <div class="dt-reb" style="flex:1;text-align:right;font-size:var(--f-xs);color:var(--t2);font-weight:500;min-width:60px">리밸런싱</div>
-    <div class="dt-bar dt-sortbar" style="flex:1.2;font-size:var(--f-xs);color:var(--t2);font-weight:500;min-width:100px;cursor:pointer;white-space:nowrap" onclick="setDetailSort('tgt')">
-      <span style="color:color-mix(in srgb,var(--accent) 70%,var(--t3))">■</span> 목표 ${sdArrow('tgt')}
-      <span style="margin-left:6px;cursor:pointer" onclick="event.stopPropagation();setDetailSort('cur')">■ 현재 ${sdArrow('cur')}</span>
+    ${acc.noReb?'':`<div class="dt-reb" style="flex:1;text-align:right;font-size:var(--f-xs);color:var(--t2);font-weight:500;min-width:60px">리밸런싱</div>`}
+    <div class="dt-bar dt-sortbar" style="flex:1.2;font-size:var(--f-xs);color:var(--t2);font-weight:500;min-width:100px;cursor:pointer;white-space:nowrap" onclick="setDetailSort('${acc.noReb?'cur':'tgt'}')">
+      ${acc.noReb?`■ 보유 비중 ${sdArrow('cur')}`:`<span style="color:color-mix(in srgb,var(--accent) 70%,var(--t3))">■</span> 목표 ${sdArrow('tgt')}
+      <span style="margin-left:6px;cursor:pointer" onclick="event.stopPropagation();setDetailSort('cur')">■ 현재 ${sdArrow('cur')}</span>`}
     </div>
   </div>`;
 
@@ -1588,7 +1595,7 @@ function renderDetailContent(idx){
     const sortedStocks=[...acc.stocks.map((st,si)=>({st,si}))].sort((a,b)=>{
       let va,vb;
       if(sd.key==='name'){va=a.st.name||a.st.ticker;vb=b.st.name||b.st.ticker;return sd.asc?va.localeCompare(vb):vb.localeCompare(va);}
-      if(sd.key==='tgt'){va=a.st.tgt;vb=b.st.tgt;}
+      if(sd.key==='tgt'){va=acc.noReb?stW(acc,a.st):a.st.tgt;vb=acc.noReb?stW(acc,b.st):b.st.tgt;}
       if(sd.key==='cur'){va=priceLoaded?stW(acc,a.st):a.st.tgt;vb=priceLoaded?stW(acc,b.st):b.st.tgt;}
       if(sd.key==='val'||sd.key==='cost'){va=(a.st.quantity||0)*(a.st.avgPrice||0);vb=(b.st.quantity||0)*(b.st.avgPrice||0);}
       if(sd.key==='eval'){va=(a.st.quantity||0)*(a.st.price||0);vb=(b.st.quantity||0)*(b.st.price||0);}
@@ -1613,7 +1620,7 @@ function renderDetailContent(idx){
       const diff=cw-st.tgt;
       const isOver=diff>thr, isUnder=diff<-thr;
       const isLoaded=st.loaded;
-      const curColor=!isLoaded?'var(--t3)':isOver?'var(--sell)':isUnder?'var(--warn)':'var(--buy)';
+      const curColor=!isLoaded?'var(--t3)':acc.noReb?stockBaseColor(acc,st):isOver?'var(--sell)':isUnder?'var(--warn)':'var(--buy)';
       const tgtColor='color-mix(in srgb,var(--accent) 55%,transparent)';
       const tgtBorder='var(--accent)';
       const BAR=180;
@@ -1681,15 +1688,15 @@ function renderDetailContent(idx){
           return`<div class="dt-num" style="flex:1;text-align:right;min-width:60px"><div class="dt-lbl">${c.label}</div>${content}</div>`;
         }).join('')}
         <!-- 리밸런싱 -->
-        <div class="dt-reb" style="flex:1;text-align:right;min-width:60px"><div class="dt-lbl">리밸런싱</div><div id="reb-cell-${st.ticker.replace(/\./g,'_')}" class="dt-act">${actionHtml}</div></div>
+        ${acc.noReb?'':`<div class="dt-reb" style="flex:1;text-align:right;min-width:60px"><div class="dt-lbl">리밸런싱</div><div id="reb-cell-${st.ticker.replace(/\./g,'_')}" class="dt-act">${actionHtml}</div></div>`}
         <!-- 비중 바 -->
         <div class="dt-bar" style="flex:1.2;min-width:100px">
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+          ${acc.noReb?'':`<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
             <div style="flex:1;height:13px;background:var(--s2);border-radius:3px;overflow:hidden">
               <div style="width:${st.tgt}%;height:100%;background:${tgtColor};border:1px solid ${tgtBorder};border-radius:3px;box-sizing:border-box"></div>
             </div>
             <span style="min-width:calc(44px * var(--fs));white-space:nowrap;text-align:right;font-size:var(--f-sm);color:var(--accent);font-family:var(--mono);font-weight:600">${st.tgt}%</span>
-          </div>
+          </div>`}
           <div style="display:flex;align-items:center;gap:8px">
             <div style="flex:1;height:13px;background:var(--s2);border-radius:3px;overflow:hidden">
               ${isLoaded
@@ -1698,7 +1705,7 @@ function renderDetailContent(idx){
             </div>
             <span style="min-width:calc(44px * var(--fs));white-space:nowrap;text-align:right;font-size:var(--f-sm);color:${curColor};font-family:var(--mono);font-weight:600">${isLoaded?cw.toFixed(1)+'%':'?'}</span>
           </div>
-          ${isLoaded?`<div style="text-align:right;margin-top:2px">
+          ${isLoaded&&!acc.noReb?`<div style="text-align:right;margin-top:2px">
             <span style="font-size:var(--f-sm);color:${curColor};font-family:var(--mono);font-weight:700">${diff>=0?'+':''}${diff.toFixed(1)}%</span>
           </div>`:''}
         </div>
@@ -2213,6 +2220,11 @@ function openAccSheet(editIdx){
     </div>
     <div class="field"><label>계좌 이름</label><input id="f-an" value="${acc?.name??''}" placeholder="예: KRX-배당주"></div>
     <div class="field"><label>증권사</label><select id="f-ab">${BROKERS.map(b=>`<option${(acc?.broker??BROKERS[0])===b?' selected':''}>${b}</option>`).join('')}</select></div>
+    <label style="display:flex;align-items:flex-start;gap:10px;margin:0 2px 13px;cursor:pointer">
+      <input type="checkbox" id="f-areb" ${acc?.noReb?'':'checked'} style="width:18px;height:18px;margin-top:2px;flex-shrink:0;accent-color:var(--accent)">
+      <span><span style="font-size:var(--f-sm);font-weight:600">리밸런싱 사용</span><br>
+      <span style="font-size:max(10px, calc(12px * var(--fs)));color:var(--t3);line-height:1.5">끄면 보유 현황만 관리 — 목표 비중·알림·매매 계산을 숨깁니다 (입력해 둔 목표는 보관)</span></span>
+    </label>
     <div class="field-row">
       <div class="field"><label>임계값 (%)</label><input id="f-at" type="number" value="${acc?.thr??5}" step="0.5" min="1" max="20"></div>
       <div class="field"><label>메모</label><input id="f-am" value="${acc?.memo??''}" placeholder="선택"></div>
@@ -2250,10 +2262,12 @@ function saveAcc(){
   const thr=parseFloat(document.getElementById('f-at').value)||5;
   const memo=document.getElementById('f-am').value.trim();
   const principal=numIn('f-ap'), cash=numIn('f-ac');
+  const noReb=!document.getElementById('f-areb').checked||undefined;
   if(_editAccIdx!==undefined){
-    Object.assign(S.accounts[_editAccIdx],{name,market:window._mkt,broker,thr,memo,principal,cash,ci:window._ci});
+    Object.assign(S.accounts[_editAccIdx],{name,market:window._mkt,broker,thr,memo,principal,cash,ci:window._ci,noReb});
+    if(!noReb)delete S.accounts[_editAccIdx].noReb;
   }else{
-    S.accounts.push({id:Date.now().toString(),name,market:window._mkt,broker,thr,memo,principal,cash,ci:window._ci,stocks:[]});
+    S.accounts.push({id:Date.now().toString(),name,market:window._mkt,broker,thr,memo,principal,cash,ci:window._ci,stocks:[],...(noReb?{noReb}:{})});
   }
   save();closeMBg('modal-account');
   if(_editAccIdx!==undefined&&S.detailIdx===_editAccIdx)renderDetailContent(_editAccIdx);
@@ -2282,7 +2296,7 @@ function openStockSheet(accIdx,stIdx){
     <div class="field"><label>종목명</label><input id="f-sn" value="${st?.name??''}" placeholder="${isKrx?'예: 삼성전자':'예: Apple Inc.'}"></div>
     <div class="field-row">
       <div class="field"><label>보유 수량</label><input id="f-sq" type="number" value="${st?.quantity??''}" placeholder="0" step="0.001"></div>
-      <div class="field"><label>목표 비중 (%)</label><input id="f-sw" type="number" value="${st?.tgt??''}" placeholder="0" step="0.1"></div>
+      ${acc.noReb?`<input id="f-sw" type="hidden" value="${st?.tgt??0}">`:`<div class="field"><label>목표 비중 (%)</label><input id="f-sw" type="number" value="${st?.tgt??''}" placeholder="0" step="0.1"></div>`}
     </div>
     <div class="field"><label>매입가 ${isKrx?'(원)':'(USD)'} <span style="font-size:max(10px, calc(11px * var(--fs)));color:var(--t3)">선택 — 수익률 계산에 사용</span></label>
       <input id="f-savg" type="number" value="${st?.avgPrice??''}" placeholder="${isKrx?'예: 75000':'예: 182.50'}" step="${isKrx?'1':'0.01'}">
