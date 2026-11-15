@@ -4,6 +4,7 @@
 // - KIS "시세 조회" 주소만 중계 (주문·잔고 등은 차단)
 // - KIS 토큰은 kis_token 테이블에 저장해 24시간 재사용 (발급 제한: 1분 1회)
 // - 필요한 Secrets: KIS_APP_KEY, KIS_APP_SECRET, OWNER_EMAIL
+//   (AI 전략 분석을 쓰려면 ANTHROPIC_API_KEY 추가, 모델은 ANTHROPIC_MODEL 로 바꿀 수 있음)
 //
 // 요청 (POST JSON)
 //   { ping: true }                                   연결·토큰 확인
@@ -15,6 +16,7 @@
 //   { search: "삼성" | "247540" | "애플", market: "KRX" | "US" }
 //                                                    → 종목 검색 { ok, items: [{ code, name, en?, mkt }] }
 //                                                      (KIS 종목마스터 파일, 서버 메모리에 12시간 보관)
+//   { ai: { question, portfolio } }                 → Claude 전략 분석 { ok, text, model }
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { unzipSync } from "npm:fflate@0.8.2";
 
@@ -172,6 +174,34 @@ Deno.serve(async (req) => {
   try { body = await req.json(); } catch (_) { return json({ message: "잘못된 요청" }, 400); }
 
   try {
+    // ── AI 전략 분석 (Claude) — 포트폴리오 요약만 보냄 (이메일·키 없음) ──
+    if (body.ai) {
+      const key = Deno.env.get("ANTHROPIC_API_KEY");
+      if (!key) return json({ ok: false, message: "서버에 ANTHROPIC_API_KEY 가 없습니다 — Edge Functions → Secrets 에 추가하세요" });
+      const q = String(body.ai.question ?? "").slice(0, 1000);
+      const pf = JSON.stringify(body.ai.portfolio ?? {}).slice(0, 60000);
+      const model = Deno.env.get("ANTHROPIC_MODEL") || "claude-sonnet-5-5";
+      const system = [
+        "당신은 한국 개인 투자자의 포트폴리오를 점검해 주는 조언자입니다.",
+        "주어진 JSON 데이터(계좌·종목·현재/목표 비중·수익률·배당·임계값)만 근거로 답하고, 데이터에 없는 시세·뉴스는 지어내지 마세요.",
+        "한국어로, 휴대폰에서 읽기 좋게: 핵심 결론 먼저, 짧은 단락, 필요한 곳만 목록. 1,200자 안팎.",
+        "구체적인 매수·매도 수량 지시보다 원칙·비중·위험 관점의 제안을 하고, 근거 숫자를 함께 적으세요.",
+        "연금저축·IRP 계좌는 세액공제·과세이연·위험자산 한도 같은 제도 특성을 고려하세요.",
+        "마지막 줄에 '투자 판단과 책임은 본인에게 있습니다.' 한 줄만 덧붙이세요.",
+      ].join("\n");
+      const r = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+        body: JSON.stringify({ model, max_tokens: 2000, system,
+          messages: [{ role: "user", content: `포트폴리오 데이터:\n${pf}\n\n질문: ${q || "이 포트폴리오를 진단하고 전략을 제안해 주세요."}` }] }),
+        signal: AbortSignal.timeout(90000),
+      });
+      const d: any = await r.json().catch(() => null);
+      if (!r.ok) return json({ ok: false, message: `Claude API 오류 (${r.status}): ${d?.error?.message ?? ""}` });
+      const text = (d?.content ?? []).filter((c: any) => c.type === "text").map((c: any) => c.text).join("\n");
+      return json({ ok: true, text, model: d?.model ?? model });
+    }
+
     // ── Yahoo (원유·미국채) ──
     if (body.yahoo) {
       const sym = YAHOO[String(body.yahoo).toUpperCase()];

@@ -518,7 +518,7 @@ const ACCENTS=[{n:'블루',h:'#4A90D9'},{n:'그린',h:'#2ECC7A'},{n:'퍼플',h:'
   {n:'오렌지',h:'#E8A020'},{n:'레드',h:'#E85555'},{n:'티파니',h:'#1EC8C8'}];
 const AC=['#4A90D9','#2ECC7A','#E8A020','#C06AF0','#E85555','#00BCD4','#FF6B9D','#8BC34A','#FF9800','#9C27B0'];
 const BROKERS=['한국투자증권','삼성증권','키움증권','미래에셋증권','NH투자증권','나무증권','신한투자증권','KB증권','대신증권','기타'];
-const APP_VERSION='2.20.0';
+const APP_VERSION='2.21.0';
 // ── 계좌 안 종목 순서 바꾸기 (저장 순서 = 대시보드 '그래프순'·도넛 순서) ──
 let _stOrd=false;
 function toggleStOrder(){
@@ -1176,6 +1176,172 @@ function actionCellHtml(a,isKrx,sym,unit){
   return`<span class="act-pill ${sell?'sell':'buy'}">${sell?'▼ 매도':'▲ 매수'} ${fn(actQty(a))}주</span>
     <div class="act-amt" style="color:${sell?'var(--sellc)':'var(--buy)'}">${sell?'−':'+'}${amt}</div>`;
 }
+
+/* ════════════════════════ 전략: 모델 포트폴리오 · AI 분석 ════════════════════════ */
+// 자산군 비중은 널리 알려진 배분안(단순화). ETF는 예시이며 적용 전에 바꿀 수 있음
+const MODELS=[
+  {id:'aw',name:'올웨더',by:'레이 달리오 (단순화판)',desc:'경기·물가 4가지 국면 모두에 대비. 채권 비중이 높아 변동성이 낮은 편',
+   items:[['미국 주식',30,['360750','TIGER 미국S&P500'],['VTI','Vanguard Total Stock Market']],
+          ['미국 장기채',40,['304660','KODEX 미국30년국채울트라선물(H)'],['TLT','iShares 20+ Year Treasury']],
+          ['미국 중기채',15,['305080','TIGER 미국채10년선물'],['IEF','iShares 7-10 Year Treasury']],
+          ['금',7.5,['411060','ACE KRX금현물'],['GLD','SPDR Gold Shares']],
+          ['원자재',7.5,['261220','KODEX WTI원유선물(H)'],['DBC','Invesco DB Commodity']]]},
+  {id:'pp',name:'영구 포트폴리오',by:'해리 브라운',desc:'주식·장기채·단기채·금을 25%씩. 단순하고 하락장에 강한 편',
+   items:[['주식',25,['360750','TIGER 미국S&P500'],['VTI','Vanguard Total Stock Market']],
+          ['장기채',25,['304660','KODEX 미국30년국채울트라선물(H)'],['TLT','iShares 20+ Year Treasury']],
+          ['단기채·현금',25,['272580','TIGER 단기채권액티브'],['SHV','iShares Short Treasury']],
+          ['금',25,['411060','ACE KRX금현물'],['GLD','SPDR Gold Shares']]]},
+  {id:'gb',name:'골든 버터플라이',by:'타일러 (Portfolio Charts)',desc:'영구 포트폴리오에 주식 비중을 조금 더한 형태',
+   items:[['미국 주식',20,['360750','TIGER 미국S&P500'],['VTI','Vanguard Total Stock Market']],
+          ['국내 주식 / 소형가치',20,['069500','KODEX 200'],['VBR','Vanguard Small-Cap Value']],
+          ['장기채',20,['304660','KODEX 미국30년국채울트라선물(H)'],['TLT','iShares 20+ Year Treasury']],
+          ['단기채',20,['272580','TIGER 단기채권액티브'],['SHY','iShares 1-3 Year Treasury']],
+          ['금',20,['411060','ACE KRX금현물'],['GLD','SPDR Gold Shares']]]},
+  {id:'6040',name:'주식 60 / 채권 40',by:'전통적 균형형',desc:'가장 기본적인 배분. 주식 성장과 채권 완충을 함께',
+   items:[['미국 주식',40,['360750','TIGER 미국S&P500'],['VTI','Vanguard Total Stock Market']],
+          ['국내 / 해외 주식',20,['069500','KODEX 200'],['VXUS','Vanguard Total International']],
+          ['채권',40,['305080','TIGER 미국채10년선물'],['BND','Vanguard Total Bond Market']]]},
+];
+let _stgAcc=null,_stgTab='model',_stgModel=null,_aiBusy=false,_aiText='',_aiScope='acc',_aiQ='';
+function openStrategy(idx){_stgAcc=idx;_stgModel=null;renderStrategy();document.getElementById('modal-account').classList.add('open');}
+function stgTabs(){
+  const t=(k,l)=>`<button onclick="_stgTab='${k}';renderStrategy()" style="flex:1;padding:9px;border:none;border-bottom:2px solid ${_stgTab===k?'var(--accent)':'transparent'};background:none;color:${_stgTab===k?'var(--accent)':'var(--t3)'};font-size:var(--f-sm);font-weight:600;cursor:pointer">${l}</button>`;
+  return`<div style="display:flex;border-bottom:1px solid var(--bd);margin:-4px 0 14px">${t('model','📐 모델 포트폴리오')}${t('ai','🤖 AI 분석')}</div>`;
+}
+function renderStrategy(){
+  const acc=S.accounts[_stgAcc];if(!acc)return;
+  let h=`<div class="sheet-handle"></div><h3>🧭 전략 — ${esc(acc.name)}</h3>${stgTabs()}`;
+  h+=_stgTab==='model'?modelHtml(acc):aiHtml(acc);
+  h+=`<div class="sheet-btns"><button class="btn-ghost" onclick="closeMBg('modal-account')">닫기</button></div>`;
+  document.getElementById('sheet-account').innerHTML=h;
+}
+const codeOf=t=>String(t||'').toUpperCase().replace(/\.(KS|KQ)$/,'');
+function modelHtml(acc){
+  if(acc.noReb)return`<div class="alert alert-warn" style="margin:0 0 12px">이 계좌는 '리밸런싱 사용'이 꺼져 있어 목표 비중을 쓰지 않습니다. 계좌 수정에서 켜면 모델을 적용할 수 있습니다.</div>`;
+  const isKrx=acc.market==='KRX';
+  if(!_stgModel)return`<div style="font-size:var(--f-xs);color:var(--t3);line-height:1.6;margin-bottom:10px">유명 자산배분안을 골라 이 계좌의 목표 비중으로 적용합니다. ETF는 예시이며 적용 전에 바꿀 수 있습니다.</div>`
+    +MODELS.map(m=>`<div onclick="_stgModel='${m.id}';renderStrategy()" style="padding:12px 14px;border:1px solid var(--bd);border-radius:12px;margin-bottom:8px;cursor:pointer;background:var(--s2)">
+      <div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline"><b style="font-size:var(--f-md)">${m.name}</b><span style="font-size:max(10px, calc(11px * var(--fs)));color:var(--t3)">${m.by}</span></div>
+      <div style="display:flex;height:8px;border-radius:4px;overflow:hidden;margin:8px 0 6px">${m.items.map((it,k)=>`<div style="width:${it[1]}%;background:${AC[k%AC.length]}"></div>`).join('')}</div>
+      <div style="font-size:max(10px, calc(12px * var(--fs)));color:var(--t2)">${m.items.map(it=>`${it[0]} ${it[1]}%`).join(' · ')}</div>
+      <div style="font-size:max(10px, calc(12px * var(--fs)));color:var(--t3);margin-top:4px;line-height:1.5">${m.desc}</div></div>`).join('');
+  const m=MODELS.find(x=>x.id===_stgModel);
+  const held=new Set(acc.stocks.map(st=>codeOf(st.ticker)));
+  const rows=m.items.map((it,k)=>{const [code,name]=isKrx?it[2]:it[3];return`<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--bd)">
+      <div style="width:10px;height:10px;border-radius:50%;background:${AC[k%AC.length]};flex-shrink:0"></div>
+      <div style="flex:1;min-width:0"><div style="font-size:var(--f-sm);font-weight:600">${it[0]} <span style="font-family:var(--mono);color:var(--accent)">${it[1]}%</span></div>
+        <div style="font-size:max(10px, calc(12px * var(--fs)));color:var(--t3)">${esc(name)}${held.has(code)?' · <b style="color:var(--buy)">보유 중</b>':''}</div></div>
+      <input id="mdl-c-${k}" value="${code}" style="width:calc(86px * var(--fs));padding:7px 8px;border-radius:8px;border:1px solid var(--bd);background:var(--s2);color:var(--t1);font-family:var(--mono);font-size:var(--f-sm)" title="ETF 코드 (바꿀 수 있음)">
+    </div>`;}).join('');
+  const others=acc.stocks.filter(st=>!m.items.some(it=>codeOf((isKrx?it[2]:it[3])[0])===codeOf(st.ticker)));
+  return`<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><button onclick="_stgModel=null;renderStrategy()" style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:var(--f-sm);padding:0">‹ 목록</button><b style="font-size:var(--f-md)">${m.name}</b></div>
+    <div style="font-size:max(10px, calc(12px * var(--fs)));color:var(--t3);line-height:1.5;margin-bottom:6px">${m.desc}</div>
+    ${rows}
+    ${others.length?`<div style="font-size:var(--f-xs);color:var(--t2);margin:12px 0 6px">모델에 없는 기존 종목 ${others.length}개 (${others.map(st=>esc(st.name||st.ticker)).join(', ')})</div>
+      <label style="display:flex;gap:8px;align-items:flex-start;font-size:var(--f-sm);margin-bottom:6px;cursor:pointer"><input type="radio" name="mdl-other" value="ex" checked style="margin-top:3px;accent-color:var(--accent)"><span>리밸런싱 제외로 두기 <span style="color:var(--t3);font-size:var(--f-xs)">(그대로 보유, 매도 계산 안 함)</span></span></label>
+      <label style="display:flex;gap:8px;align-items:flex-start;font-size:var(--f-sm);cursor:pointer"><input type="radio" name="mdl-other" value="zero" style="margin-top:3px;accent-color:var(--accent)"><span>목표 0%로 <span style="color:var(--t3);font-size:var(--f-xs)">(전량 매도 대상으로 계산)</span></span></label>`:''}
+    <div style="font-size:max(10px, calc(12px * var(--fs)));color:var(--t3);line-height:1.6;margin:12px 0 4px">· 없는 ETF는 수량 0주로 추가됩니다 — 적용 후 종목 목록의 매수 수량을 확인하세요<br>· ${_cloudUser?'적용 전 지금 상태를 클라우드에 백업합니다':'로그인하면 적용 전 상태가 클라우드에 자동 백업됩니다'}</div>
+    <button class="btn-primary" style="width:100%;margin-top:8px" onclick="applyModel()">이 계좌에 적용</button>`;
+}
+async function applyModel(){
+  const acc=S.accounts[_stgAcc],m=MODELS.find(x=>x.id===_stgModel);if(!acc||!m)return;
+  const isKrx=acc.market==='KRX';
+  const codes=m.items.map((it,k)=>(document.getElementById('mdl-c-'+k)?.value||'').trim().toUpperCase());
+  if(codes.some(c=>!c)){alert('ETF 코드를 모두 입력하세요');return;}
+  if(!confirm(`'${m.name}' 비중을 이 계좌 목표로 적용할까요?`))return;
+  if(_cloudUser){try{await cloudBackup('manual',`${m.name} 적용 전`);}catch(e){if(!confirm('백업하지 못했습니다 ('+e.message+').\n그래도 적용할까요?'))return;}}
+  const other=document.querySelector('input[name=mdl-other]:checked')?.value||'ex';
+  const used=new Set();
+  m.items.forEach((it,k)=>{
+    const code=codeOf(codes[k]);used.add(code);
+    let st=acc.stocks.find(x=>codeOf(x.ticker)===code);
+    const def=isKrx?it[2]:it[3];
+    if(!st){st={id:Date.now().toString()+k,ticker:isKrx?code+'.KS':code,name:code===codeOf(def[0])?def[1]:code,quantity:0,price:0,loaded:false};acc.stocks.push(st);}
+    st.tgt=it[1];delete st.noReb;
+  });
+  acc.stocks.forEach(st=>{if(used.has(codeOf(st.ticker)))return;if(other==='zero'){st.tgt=0;delete st.noReb;}else st.noReb=true;});
+  save();closeMBg('modal-account');
+  S.sortDetail={key:'order',asc:true};
+  renderDetailContent(_stgAcc);
+  if(acc.stocks.some(st=>!st.loaded))setTimeout(()=>{if(confirm('새로 추가한 종목의 시세를 지금 받을까요?'))refreshPrices();},100);
+}
+// ── AI 분석 ──
+function aiPortfolio(scope){
+  const accs=scope==='all'?S.accounts:[S.accounts[_stgAcc]];
+  return{기준일:localDate(),환율_USDKRW:S.rate,계좌:accs.map(a=>{const pf=accPerf(a),ti=taxInfo(a);return{
+    이름:a.name,시장:a.market,종류:a.taxLimit>0?'연금저축·IRP':'일반',리밸런싱:a.noReb?'사용 안 함':`범위 ±${a.thr||5}%`,
+    평가금액:Math.round(accVal(a)),예수금:+a.cash||0,납입원금:+a.principal||0,
+    평가수익률:pf.evalPct!=null?+pf.evalPct.toFixed(2):null,누적수익률:pf.cumPct!=null?+pf.cumPct.toFixed(2):null,
+    ...(ti?{세액공제:{올해납입:ti.paid,한도:ti.lim}}:{}),
+    종목:a.stocks.map(st=>({이름:st.name,코드:st.ticker,수량:st.quantity||0,현재가:st.price||null,매입가:st.avgPrice||null,
+      현재비중:st.loaded?+stW(a,st).toFixed(1):null,목표비중:a.noReb||isEx(a,st)?null:st.tgt,리밸런싱제외:isEx(a,st)||undefined,
+      연초대비:ytdPct(st)!=null?+ytdPct(st).toFixed(1):null,주당연배당:stDps(st)}))};})};
+}
+const AI_PRESETS=[['진단','이 포트폴리오의 강점과 약점을 진단해 주세요.'],['리밸런싱','지금 리밸런싱이 필요한지, 어떤 순서로 하면 좋을지 제안해 주세요.'],['위험 점검','쏠림·환율·금리·상관관계 위험을 점검해 주세요.'],['배당·현금흐름','배당과 현금흐름을 늘리려면 어떻게 바꾸면 좋을지 제안해 주세요.']];
+// 분석 요청문: 서버 함수의 시스템 지시와 같은 내용 + 포트폴리오 JSON
+const AI_GUIDE=['당신은 한국 개인 투자자의 포트폴리오를 점검해 주는 조언자입니다.',
+  '아래 JSON 데이터(계좌·종목·현재/목표 비중·수익률·배당·임계값)만 근거로 답하고, 데이터에 없는 시세·뉴스는 지어내지 마세요.',
+  '한국어로, 휴대폰에서 읽기 좋게: 핵심 결론 먼저, 짧은 단락, 필요한 곳만 목록. 1,200자 안팎.',
+  '구체적인 매수·매도 수량 지시보다 원칙·비중·위험 관점의 제안을 하고, 근거 숫자를 함께 적으세요.',
+  '연금저축·IRP 계좌는 세액공제·과세이연·위험자산 한도 같은 제도 특성을 고려하세요.'].join('\n');
+function aiPromptText(){
+  const q=(document.getElementById('ai-q')?.value||'').trim()||AI_PRESETS[0][1];
+  return`${AI_GUIDE}\n\n질문: ${q}\n\n포트폴리오 데이터 (리밸런서 앱에서 내보냄):\n${JSON.stringify(aiPortfolio(_aiScope))}`;
+}
+async function copyAIPrompt(){
+  _aiQ=document.getElementById('ai-q')?.value||'';
+  const t=aiPromptText();let ok=false;
+  try{await navigator.clipboard.writeText(t);ok=true;}catch(e){
+    try{const ta=document.createElement('textarea');ta.value=t;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();ok=document.execCommand('copy');ta.remove();}catch(e2){}
+  }
+  const m=document.getElementById('ai-copy-msg');
+  if(m){m.style.display='block';m.innerHTML=ok
+    ?`✅ 복사했습니다 (${fn(t.length)}자). Claude 앱의 새 대화에 <b>붙여넣기</b>하세요.<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap"><a href="https://claude.ai/new" target="_blank" rel="noopener" style="padding:7px 12px;border-radius:999px;border:1px solid var(--accent);color:var(--accent);text-decoration:none;font-size:var(--f-xs)">Claude 열기 ↗</a><a href="https://chatgpt.com/" target="_blank" rel="noopener" style="padding:7px 12px;border-radius:999px;border:1px solid var(--bd);color:var(--t2);text-decoration:none;font-size:var(--f-xs)">ChatGPT 열기 ↗</a></div>`
+    :`복사하지 못했습니다. 아래 내용을 길게 눌러 직접 복사하세요.<textarea readonly style="width:100%;height:120px;margin-top:8px;font-size:var(--f-xs);background:var(--s1);color:var(--t1);border:1px solid var(--bd);border-radius:8px">${esc(t)}</textarea>`;}
+}
+function aiHtml(acc){
+  const chip=(k,l,on,fn_)=>`<button onclick="${fn_}" style="padding:6px 12px;border-radius:999px;border:1px solid ${on?'var(--accent)':'var(--bd)'};background:${on?'color-mix(in srgb,var(--accent) 14%,transparent)':'var(--s2)'};color:${on?'var(--accent)':'var(--t1)'};font-size:var(--f-xs);cursor:pointer">${l}</button>`;
+  return`<div style="font-size:max(10px, calc(12px * var(--fs)));color:var(--t3);line-height:1.6;margin-bottom:10px">질문을 고른 뒤 <b>복사</b>해서 Claude 앱(무료)에 붙여넣으면 분석을 받을 수 있습니다. 계좌·종목·비중·수익률 요약만 들어가고 이메일·키는 들어가지 않습니다.</div>
+    <div style="display:flex;gap:6px;margin-bottom:8px">${[['acc','이 계좌'],['all','전체 계좌']].map(([k,l])=>`<button onclick="_aiQ=document.getElementById('ai-q').value;_aiScope='${k}';renderStrategy()" style="flex:1;padding:7px;border-radius:999px;border:1px solid ${_aiScope===k?'var(--accent)':'var(--bd)'};background:${_aiScope===k?'color-mix(in srgb,var(--accent) 14%,transparent)':'var(--s2)'};color:${_aiScope===k?'var(--accent)':'var(--t2)'};font-size:var(--f-xs);cursor:pointer">${l}</button>`).join('')}</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">${AI_PRESETS.map((p,k)=>chip(k,p[0],_aiQ===p[1],`_aiQ=AI_PRESETS[${k}][1];renderStrategy()`)).join('')}</div>
+    <textarea id="ai-q" maxlength="300" rows="2" placeholder="질문 (위 버튼으로 고르거나 직접 입력 — 예: 은퇴 7년 남았는데 주식 비중은?)" style="width:100%;box-sizing:border-box;padding:9px 11px;border-radius:9px;border:1px solid var(--bd);background:var(--s2);color:var(--t1);font-size:var(--f-sm);resize:vertical;font-family:inherit">${esc(_aiQ)}</textarea>
+    <button class="btn-primary" style="width:100%;margin-top:8px" onclick="copyAIPrompt()">📋 분석 요청 복사</button>
+    <div id="ai-copy-msg" style="display:none;font-size:var(--f-xs);color:var(--t2);line-height:1.6;margin-top:8px;padding:10px 12px;border:1px solid var(--bd);border-radius:10px;background:var(--s2)"></div>
+    <details style="margin-top:12px" ${_aiText||_aiBusy?'open':''}>
+      <summary style="font-size:var(--f-xs);color:var(--t3);cursor:pointer">앱 안에서 바로 받기 (Claude API 키 필요 · 유료)</summary>
+      ${_cloudUser?`<button onclick="askAI()" ${_aiBusy?'disabled':''} style="width:100%;margin-top:8px;padding:9px;border-radius:9px;border:1px solid var(--accent);background:var(--s2);color:var(--accent);font-size:var(--f-sm);font-weight:600;cursor:pointer">${_aiBusy?'분석 중…':'🤖 앱 안에서 분석 받기'}</button>
+        <div style="font-size:max(10px, calc(11px * var(--fs)));color:var(--t3);margin-top:6px;line-height:1.5">Supabase Secrets에 ANTHROPIC_API_KEY를 넣고 kis-proxy를 배포해야 동작합니다.</div>`
+      :`<div style="font-size:var(--f-xs);color:var(--t3);margin-top:8px">☁ 로그인 상태에서만 쓸 수 있습니다.</div>`}
+      <div id="ai-out" style="margin-top:8px;font-size:var(--f-sm);line-height:1.7;color:var(--t1);background:var(--s2);border:1px solid var(--bd);border-radius:10px;padding:${_aiText||_aiBusy?'12px 14px':'0'};${_aiText||_aiBusy?'':'display:none'}">${_aiBusy?'<span style="color:var(--t3)">Claude가 포트폴리오를 읽고 있습니다… (보통 10~30초)</span>':mdLite(_aiText)}</div>
+    </details>`;
+}
+async function askAI(q){
+  if(_aiBusy)return;
+  q=q||(document.getElementById('ai-q')?.value||'').trim();_aiQ=document.getElementById('ai-q')?.value||'';
+  _aiBusy=true;_aiText='';renderStrategy();
+  try{
+    const r=await cloudInvoke({ai:{question:q,portfolio:aiPortfolio(_aiScope)}});
+    _aiText=r?.ok?r.text:'⚠ '+(r?.message||'분석 실패');
+  }catch(e){_aiText='⚠ '+(e.message||e);}
+  _aiBusy=false;if(document.getElementById('modal-account').classList.contains('open')&&_stgTab==='ai')renderStrategy();
+}
+// 간단한 마크다운 → HTML (제목·굵게·목록·문단만)
+function mdLite(t){
+  const L=esc(t||'').split('\n');let h='',inL=false;
+  const il=x=>x.replace(/\*\*(.+?)\*\*/g,'<b>$1</b>').replace(/`([^`]+)`/g,'<code>$1</code>');
+  for(const raw of L){const l=raw.trimEnd();
+    const li=l.match(/^\s*(?:[-*•]|\d+\.)\s+(.*)/);
+    if(li){if(!inL){h+='<ul style="margin:4px 0 8px;padding-left:20px">';inL=true;}h+=`<li>${il(li[1])}</li>`;continue;}
+    if(inL){h+='</ul>';inL=false;}
+    const hd=l.match(/^#{1,4}\s+(.*)/);
+    if(hd){h+=`<div style="font-weight:700;margin:10px 0 4px;color:var(--accent)">${il(hd[1])}</div>`;continue;}
+    if(/^\s*(-{3,}|\*{3,})\s*$/.test(l)){h+='<hr style="border:none;border-top:1px solid var(--bd);margin:8px 0">';continue;}
+    h+=l?`<div style="margin:0 0 6px">${il(l)}</div>`:'';
+  }
+  if(inL)h+='</ul>';
+  return h;
+}
+
 // ── 입금 기록 (acc.deposits: [{d:'YYYYMMDD', a:금액, ap:납입원금·예수금 반영 여부}]) ──
 // 숫자 입력칸: 천 단위 쉼표 (정수만이면 int=true)
 function fmtNumIn(el,int){let v=el.value.replace(int?/[^\d]/g:/[^\d.]/g,'');const [a,b]=v.split('.');el.value=a.replace(/\B(?=(\d{3})+(?!\d))/g,',')+(b!==undefined&&!int?'.'+b:'');}
@@ -1776,7 +1942,7 @@ function renderDetailContent(idx){
           <div style="height:8px;background:var(--s2);border-radius:4px;margin:6px 0 4px;overflow:hidden"><div style="width:${ti.pct.toFixed(1)}%;height:100%;background:${ti.left>0?'var(--accent)':'var(--buy)'};border-radius:4px"></div></div>
           <div style="font-size:var(--f-xs);font-family:var(--mono);color:var(--t2)">${moneyStr(acc,ti.paid)} / ${moneyStr(acc,ti.lim)} <span style="color:var(--t3)">(${ti.pct.toFixed(0)}%)</span></div>
         </div>`:'';
-      const btn=`<div style="display:flex;gap:8px;margin-top:12px"><button onclick="openDepositSheet(${idx})" style="flex:1;padding:9px;border-radius:9px;border:1px solid ${color}60;background:${color}18;color:var(--t1);font-size:var(--f-sm);font-weight:600;cursor:pointer">＋ 입금</button></div>`;
+      const btn=`<div style="display:flex;gap:8px;margin-top:12px"><button onclick="openDepositSheet(${idx})" style="flex:1;padding:9px;border-radius:9px;border:1px solid ${color}60;background:${color}18;color:var(--t1);font-size:var(--f-sm);font-weight:600;cursor:pointer">＋ 입금</button><button onclick="openStrategy(${idx})" style="flex:1;padding:9px;border-radius:9px;border:1px solid ${color}60;background:${color}18;color:var(--t1);font-size:var(--f-sm);font-weight:600;cursor:pointer">🧭 전략</button></div>`;
       return (g?`<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px 14px;margin-top:12px;padding-top:12px;border-top:1px solid ${color}30">${g}</div>`:'')
         +(notes.length?`<div style="font-size:max(10px, calc(12px * var(--fs)));color:var(--t3);margin-top:8px;line-height:1.5">${notes.join('<br>')}</div>`:'')
         +tax+btn;
