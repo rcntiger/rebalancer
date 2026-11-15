@@ -270,6 +270,8 @@ html,body{height:100%;font-family:var(--sans);background:var(--bg);color:var(--t
 .iw input{padding-right:36px;}
 .iw-eye{position:absolute;right:10px;top:50%;transform:translateY(-50%);cursor:pointer;
   color:var(--t2);font-size:var(--f-md);user-select:none;}
+.nm2{overflow-wrap:anywhere;word-break:keep-all;line-height:1.3;min-width:0}
+.lg-name.nm2{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;overflow-wrap:break-word}
 .sn-it{padding:9px 12px;border-bottom:1px solid var(--bd);cursor:pointer;font-size:var(--f-sm);line-height:1.4}
 .sn-it:last-child{border-bottom:none}
 .sn-it:hover{background:var(--s2)}
@@ -303,6 +305,11 @@ html,body{height:100%;font-family:var(--sans);background:var(--bg);color:var(--t
 .dt-lbl{display:none;}
 
 /* ════════ 모바일 (폭 600px 이하) ════════ */
+/* 태블릿·좁은 창: 범례를 도넛 아래로 (종목명이 잘리지 않게) */
+@media (min-width:601px) and (max-width:900px){
+  .acc-body{display:grid !important;grid-template-columns:1fr auto;align-items:center;row-gap:12px;}
+  .acc-legend{grid-column:1 / -1;}
+}
 @media (max-width:600px){
   :root{
     --f-xs:max(10px, calc(13px * var(--fs)));--f-sm:calc(15px * var(--fs));--f-md:calc(16px * var(--fs));
@@ -483,7 +490,7 @@ const ACCENTS=[{n:'블루',h:'#4A90D9'},{n:'그린',h:'#2ECC7A'},{n:'퍼플',h:'
   {n:'오렌지',h:'#E8A020'},{n:'레드',h:'#E85555'},{n:'티파니',h:'#1EC8C8'}];
 const AC=['#4A90D9','#2ECC7A','#E8A020','#C06AF0','#E85555','#00BCD4','#FF6B9D','#8BC34A','#FF9800','#9C27B0'];
 const BROKERS=['한국투자증권','삼성증권','키움증권','미래에셋증권','NH투자증권','나무증권','신한투자증권','KB증권','대신증권','기타'];
-const APP_VERSION='2.13.1';
+const APP_VERSION='2.13.2';
 // 증권사 목록 = 기본 목록 + 계좌에 직접 입력해 쓰고 있는 증권사 ('기타'는 맨 끝)
 function brokerList(){
   const base=BROKERS.filter(b=>b!=='기타');
@@ -1390,7 +1397,7 @@ function renderDash(){
                   return`<div class="lg-row" data-acc="${i}" data-k="${sk}" onmouseenter="donutFocus(${i},${sk})" onmouseleave="donutFocus(${i},null)"
                     onclick="event.stopPropagation();donutTap(${i},${sk})" style="display:flex;align-items:center;gap:5px;cursor:pointer;border-radius:6px;padding:1px 4px;margin:0 -4px;transition:opacity .15s,background .15s">
                   <div style="width:10px;height:10px;border-radius:50%;background:${baseCol};flex-shrink:0"></div>
-                  <div class="lg-name" style="font-size:calc(17px * var(--fs));color:var(--t2);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${st.name||st.ticker}</div>
+                  <div class="lg-name nm2" title="${esc(st.name||st.ticker)}" style="font-size:calc(17px * var(--fs));color:var(--t2);flex:1">${esc(st.name||st.ticker)}</div>
                   <div style="display:flex;align-items:center;gap:4px;flex-shrink:0">
                     ${acc.noReb?'':`<span style="font-size:max(10px, calc(13px * var(--fs)));font-family:DM Mono;color:var(--accent);font-weight:500">${st.tgt}%</span>
                     <span style="font-size:max(10px, calc(11px * var(--fs)));color:var(--t3)">→</span>`}
@@ -1699,7 +1706,7 @@ function renderDetailContent(idx){
   ];
   const activeCols=colDefs.filter(c=>dc[c.key]);
   h+=`<div class="dt-wrap"><div class="dt-row dt-head" style="display:flex;align-items:center;padding:5px 14px 7px;gap:8px;border-bottom:1px solid var(--bd)">
-    <div class="dt-name" style="flex:1.2;font-size:var(--f-sm);color:var(--t2);font-weight:600;cursor:pointer;user-select:none;min-width:80px" onclick="setDetailSort('name')">종목 ${sdArrow('name')}</div>
+    <div class="dt-name" style="flex:1.2;font-size:var(--f-sm);color:var(--t2);font-weight:600;cursor:pointer;user-select:none;min-width:calc(150px * var(--fs))" onclick="setDetailSort('name')">종목 ${sdArrow('name')}</div>
     ${activeCols.map(c=>`
       <div class="dt-num" style="flex:1;text-align:right;font-size:var(--f-xs);color:var(--t2);font-weight:500;cursor:pointer;user-select:none;min-width:60px;white-space:nowrap"
         onclick="setDetailSort('${c.sort}')">${c.label} ${sdArrow(c.sort)}</div>`).join('')}
@@ -1782,8 +1789,8 @@ function renderDetailContent(idx){
 
       h+=`<div class="dt-row" style="display:flex;align-items:center;padding:13px 14px;gap:8px;border-bottom:1px solid var(--bd)">
         <!-- 종목명 -->
-        <div class="dt-name" style="flex:1.2;min-width:80px">
-          <div style="font-size:var(--f-md);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${st.name}</div>
+        <div class="dt-name" style="flex:1.2;min-width:calc(150px * var(--fs))">
+          <div class="nm2" title="${esc(st.name)}" style="font-size:var(--f-md);font-weight:600">${esc(st.name)}</div>
           <div style="font-size:var(--f-xs);color:var(--t2);font-family:var(--mono)">${st.ticker}</div>
           <div style="display:flex;gap:4px;margin-top:4px">
             <div class="act-btn" style="color:var(--accent)" onclick="openStockSheet(${idx},${si})">✎</div>
