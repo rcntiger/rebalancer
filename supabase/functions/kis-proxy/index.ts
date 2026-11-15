@@ -1,6 +1,6 @@
 // 리밸런서 KIS 클라우드 프록시 (Supabase Edge Function)
 //
-// - 로그인한 본인(OWNER_EMAIL)만 사용 가능
+// - OWNER_EMAIL 에 적힌 이메일로 로그인한 사람만 사용 가능 (여러 명은 쉼표로: a@x.com,b@y.com)
 // - KIS "시세 조회" 주소만 중계 (주문·잔고 등은 차단)
 // - KIS 토큰은 kis_token 테이블에 저장해 24시간 재사용 (발급 제한: 1분 1회)
 // - 필요한 Secrets: KIS_APP_KEY, KIS_APP_SECRET, OWNER_EMAIL
@@ -163,9 +163,9 @@ Deno.serve(async (req) => {
   const anon = Deno.env.get("SUPABASE_ANON_KEY") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
   const db = createClient(Deno.env.get("SUPABASE_URL")!, anon, { global: { headers: { Authorization: auth } } });
   const { data: u } = await db.auth.getUser(auth.replace(/^Bearer\s+/i, ""));
-  const owner = (Deno.env.get("OWNER_EMAIL") ?? "").toLowerCase().trim();
+  const owners = (Deno.env.get("OWNER_EMAIL") ?? "").toLowerCase().split(",").map((s) => s.trim()).filter(Boolean);
   if (!u?.user) return json({ message: "로그인이 필요합니다" }, 401);
-  if (!owner || (u.user.email ?? "").toLowerCase() !== owner) return json({ message: "허용되지 않은 사용자입니다" }, 403);
+  if (!owners.includes((u.user.email ?? "").toLowerCase())) return json({ message: "허용되지 않은 사용자입니다" }, 403);
 
   const ak = Deno.env.get("KIS_APP_KEY"), as = Deno.env.get("KIS_APP_SECRET");
   if (!ak || !as) return json({ message: "서버에 KIS 키가 설정되지 않았습니다" }, 500);
