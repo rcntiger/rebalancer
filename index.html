@@ -1,8 +1,12 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="ko" data-theme="dark">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- 폰 상단바·주소창 색을 앱 배경색으로 고정 (브라우저가 임의 색으로 칠하지 않게) -->
+<meta name="theme-color" content="#080C12">
+<meta name="color-scheme" content="dark light">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>리밸런서</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
 <style>
@@ -490,7 +494,7 @@ const ACCENTS=[{n:'블루',h:'#4A90D9'},{n:'그린',h:'#2ECC7A'},{n:'퍼플',h:'
   {n:'오렌지',h:'#E8A020'},{n:'레드',h:'#E85555'},{n:'티파니',h:'#1EC8C8'}];
 const AC=['#4A90D9','#2ECC7A','#E8A020','#C06AF0','#E85555','#00BCD4','#FF6B9D','#8BC34A','#FF9800','#9C27B0'];
 const BROKERS=['한국투자증권','삼성증권','키움증권','미래에셋증권','NH투자증권','나무증권','신한투자증권','KB증권','대신증권','기타'];
-const APP_VERSION='2.13.2';
+const APP_VERSION='2.13.3';
 // 증권사 목록 = 기본 목록 + 계좌에 직접 입력해 쓰고 있는 증권사 ('기타'는 맨 끝)
 function brokerList(){
   const base=BROKERS.filter(b=>b!=='기타');
@@ -2496,6 +2500,10 @@ function loadFont(k){
 }
 function applyTheme(){
   document.body.setAttribute('data-theme',S.isDark?'dark':'light');
+  document.documentElement.setAttribute('data-theme',S.isDark?'dark':'light');   // 위아래로 당길 때 보이는 바탕도 같은 색
+  {const bg=S.isDark?'#080C12':'#EEF3FB';
+   document.querySelectorAll('meta[name="theme-color"]').forEach(m=>m.setAttribute('content',bg));
+   document.documentElement.style.colorScheme=S.isDark?'dark':'light';}
   const ah=ACCENTS[S.accent].h;
   document.documentElement.style.setProperty('--accent',ah);
   const rs=document.documentElement.style;
