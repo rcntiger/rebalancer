@@ -516,7 +516,20 @@ const ACCENTS=[{n:'블루',h:'#4A90D9'},{n:'그린',h:'#2ECC7A'},{n:'퍼플',h:'
   {n:'오렌지',h:'#E8A020'},{n:'레드',h:'#E85555'},{n:'티파니',h:'#1EC8C8'}];
 const AC=['#4A90D9','#2ECC7A','#E8A020','#C06AF0','#E85555','#00BCD4','#FF6B9D','#8BC34A','#FF9800','#9C27B0'];
 const BROKERS=['한국투자증권','삼성증권','키움증권','미래에셋증권','NH투자증권','나무증권','신한투자증권','KB증권','대신증권','기타'];
-const APP_VERSION='2.17.0';
+const APP_VERSION='2.18.0';
+// ── 계좌 안 종목 순서 바꾸기 (저장 순서 = 대시보드 '그래프순'·도넛 순서) ──
+let _stOrd=false;
+function toggleStOrder(){
+  _stOrd=!_stOrd;
+  if(!_stOrd)S.sortDetail={key:'order',asc:true};   // 완료하면 지정한 순서로 보기
+  renderDetailContent(S.detailIdx);
+}
+function moveSt(i,d){
+  const acc=S.accounts[S.detailIdx],a=acc.stocks,j=i+d;if(j<0||j>=a.length)return;
+  [a[i],a[j]]=[a[j],a[i]];
+  delete _dnSel[S.detailIdx];save();renderDetailContent(S.detailIdx);
+  requestAnimationFrame(()=>document.getElementById('sord-'+j)?.scrollIntoView({block:'nearest',behavior:'smooth'}));
+}
 // ── 계좌 순서 바꾸기 ──
 let _accOrd=false;
 function toggleAccOrder(){_accOrd=!_accOrd;renderDash();}
@@ -1661,6 +1674,7 @@ function openDetail(idx){
   document.getElementById('detail-content').scrollTop=0;
 }
 function closeDetail(){
+  _stOrd=false;
   document.getElementById('detail-panel').classList.remove('open');
   render();
 }
@@ -1816,11 +1830,29 @@ function renderDetailContent(idx){
   h+=`<div style="display:flex;align-items:center;padding:10px 14px 4px;gap:4px">
     <span style="font-size:var(--f-sm);color:var(--t3);text-transform:uppercase;letter-spacing:1px;font-weight:600">종목 목록</span>
     <div style="flex:1"></div>
+    ${acc.stocks.length>1?`<button onclick="toggleStOrder()" style="font-size:var(--f-xs);padding:2px 10px;border-radius:10px;cursor:pointer;margin-right:6px;
+      background:${_stOrd?'color-mix(in srgb,var(--accent) 15%,transparent)':'var(--s2)'};border:1px solid ${_stOrd?'var(--accent)':'var(--bd)'};color:${_stOrd?'var(--accent)':'var(--t2)'}">${_stOrd?'✓ 완료':'⇅ 순서'}</button>`:''}
     <button onclick="openColSheet()" style="font-size:var(--f-xs);padding:2px 10px;border-radius:10px;
       background:var(--s2);border:1px solid var(--bd);color:var(--t2);cursor:pointer;margin-right:6px">⚙ 컬럼</button>
     ${acc.noReb?'':`<span style="font-size:var(--f-sm);color:var(--t3);font-weight:500">임계값 ±${thr}%</span>`}
   </div>`;
 
+  if(_stOrd&&acc.stocks.length>1){
+    const ob='width:calc(40px * var(--fs));height:calc(36px * var(--fs));border-radius:9px;border:1px solid var(--bd);background:var(--s2);color:var(--t1);font-size:var(--f-sm);cursor:pointer;flex-shrink:0';
+    h+=`<div style="display:flex;flex-direction:column;gap:6px;padding:6px 12px 0">${acc.stocks.map((st,i)=>`
+      <div id="sord-${i}" style="display:flex;align-items:center;gap:10px;padding:9px 12px;border:1px solid var(--bd);border-radius:10px;background:var(--s1)">
+        <span style="font-family:var(--mono);color:var(--t3);font-size:var(--f-xs);min-width:1.6em">${i+1}</span>
+        <div style="width:10px;height:10px;border-radius:50%;background:${stockBaseColor(acc,st)};flex-shrink:0"></div>
+        <div style="flex:1;min-width:0"><div class="nm2" style="font-size:var(--f-sm);font-weight:600">${esc(st.name||st.ticker)}</div>
+          <div style="font-size:max(10px, calc(12px * var(--fs)));color:var(--t3);font-family:var(--mono)">${esc(st.ticker)}</div></div>
+        <button onclick="moveSt(${i},-1)" ${i===0?`disabled style="${ob};opacity:.3"`:`style="${ob}"`} title="위로">▲</button>
+        <button onclick="moveSt(${i},1)" ${i===acc.stocks.length-1?`disabled style="${ob};opacity:.3"`:`style="${ob}"`} title="아래로">▼</button>
+      </div>`).join('')}</div>
+      <div style="font-size:max(10px, calc(12px * var(--fs)));color:var(--t3);text-align:center;margin:10px 12px 0;line-height:1.5">이 순서가 대시보드 '그래프순'·도넛 순서가 됩니다 · 완료하면 상세도 이 순서로 보여 줍니다</div>`;
+    h+=`<div style="padding:14px 12px 20px"></div>`;
+    document.getElementById('detail-content').innerHTML=h;
+    return;
+  }
   // ── 컬럼 헤더 ────────────────────────────────────
   const sd=S.sortDetail;
   const dc=S.detailCols;
@@ -1838,11 +1870,11 @@ function renderDetailContent(idx){
   ];
   const activeCols=colDefs.filter(c=>dc[c.key]);
   // 모바일: 정렬 칩 대신 드롭다운 하나 + 방향 버튼
-  {const opts=[['name','종목명'],...activeCols.map(c=>[c.sort,c.label]),['cur','현재 비중'],...(acc.noReb?[]:[['tgt','목표 비중']])];
+  {const opts=[['order','지정 순서'],['name','종목명'],...activeCols.map(c=>[c.sort,c.label]),['cur','현재 비중'],...(acc.noReb?[]:[['tgt','목표 비중']])];
    if(!opts.some(o=>o[0]===sd.key))opts.push([sd.key,'기타']);
    h+=`<div class="dt-msort">
      <span style="color:var(--t3)">정렬</span>
-     <select onchange="S.sortDetail.key=this.value;S.sortDetail.asc=(this.value==='name');renderDetailContent(S.detailIdx)">
+     <select onchange="S.sortDetail.key=this.value;S.sortDetail.asc=(this.value==='name'||this.value==='order');renderDetailContent(S.detailIdx)">
        ${opts.map(([k,l])=>`<option value="${k}"${sd.key===k?' selected':''}>${l}</option>`).join('')}</select>
      <button onclick="S.sortDetail.asc=!S.sortDetail.asc;renderDetailContent(S.detailIdx)" title="정렬 방향 바꾸기">${sd.asc?'▲ 오름차순':'▼ 내림차순'}</button>
    </div>`;}
@@ -1864,6 +1896,7 @@ function renderDetailContent(idx){
     const maxPct=Math.max(...acc.stocks.filter(st=>!isEx(acc,st)).flatMap(st=>[st.tgt,priceLoaded?rbW(acc,st):st.tgt]),1);
     const sortedStocks=[...acc.stocks.map((st,si)=>({st,si}))].sort((a,b)=>{
       let va,vb;
+      if(sd.key==='order')return sd.asc?a.si-b.si:b.si-a.si;
       if(sd.key==='name'){va=a.st.name||a.st.ticker;vb=b.st.name||b.st.ticker;return sd.asc?va.localeCompare(vb):vb.localeCompare(va);}
       if(sd.key==='tgt'){va=acc.noReb?stW(acc,a.st):a.st.tgt;vb=acc.noReb?stW(acc,b.st):b.st.tgt;}
       if(sd.key==='cur'){va=priceLoaded?stW(acc,a.st):a.st.tgt;vb=priceLoaded?stW(acc,b.st):b.st.tgt;}
