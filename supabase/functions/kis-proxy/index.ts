@@ -10,6 +10,8 @@
 //   { path: "/uapi/...", query: "A=1&B=2", tr_id }   KIS 시세 조회 → KIS 응답 그대로
 //   { yahoo: "OIL" | "US10Y" }                       → { rt_cd: "0", output: { price } }
 //   { div: "458730.KS" | "JEPQ" }                     → 최근 1년 배당 합계 { ok, ttm, n, cur, last }
+//   { yq: "EUV" }                                    → Yahoo 시세·종목명 { ok, price, name, exch, cur }
+//                                                      (KIS에 없는 미국 종목 — 예: Cboe 상장 ETF — 대체용)
 //   { search: "삼성" | "247540" | "애플", market: "KRX" | "US" }
 //                                                    → 종목 검색 { ok, items: [{ code, name, en?, mkt }] }
 //                                                      (KIS 종목마스터 파일, 서버 메모리에 12시간 보관)
@@ -192,6 +194,19 @@ Deno.serve(async (req) => {
       } catch (e) {
         return json({ ok: false, message: String((e as Error).message ?? e) });
       }
+    }
+
+    // ── Yahoo 시세·종목명 (KIS에 없는 미국 종목 대체) ──
+    if (body.yq) {
+      const sym = String(body.yq).toUpperCase().trim();
+      if (!/^[A-Z0-9][A-Z0-9.\-]{0,14}$/.test(sym)) return json({ ok: false, message: "잘못된 종목코드" }, 400);
+      const r = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?range=1d&interval=1d`,
+        { headers: { "User-Agent": "Mozilla/5.0" }, signal: AbortSignal.timeout(8000) });
+      const d: any = await r.json().catch(() => null);
+      const m = d?.chart?.result?.[0]?.meta;
+      if (!m) return json({ ok: false, message: "Yahoo에도 없는 종목" });
+      return json({ ok: true, price: Number(m.regularMarketPrice) || null, name: m.longName || m.shortName || "",
+        exch: m.fullExchangeName || m.exchangeName || "", cur: m.currency || "" });
     }
 
     if (body.div) {

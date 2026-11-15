@@ -483,7 +483,7 @@ const ACCENTS=[{n:'블루',h:'#4A90D9'},{n:'그린',h:'#2ECC7A'},{n:'퍼플',h:'
   {n:'오렌지',h:'#E8A020'},{n:'레드',h:'#E85555'},{n:'티파니',h:'#1EC8C8'}];
 const AC=['#4A90D9','#2ECC7A','#E8A020','#C06AF0','#E85555','#00BCD4','#FF6B9D','#8BC34A','#FF9800','#9C27B0'];
 const BROKERS=['한국투자증권','삼성증권','키움증권','미래에셋증권','NH투자증권','나무증권','신한투자증권','KB증권','대신증권','기타'];
-const APP_VERSION='2.13.0';
+const APP_VERSION='2.13.1';
 // 증권사 목록 = 기본 목록 + 계좌에 직접 입력해 쓰고 있는 증권사 ('기타'는 맨 끝)
 function brokerList(){
   const base=BROKERS.filter(b=>b!=='기타');
@@ -815,8 +815,14 @@ async function autoName(force){
         if(hit){n=hit.name;if(req===_nameReq)setTickerMkt(hit.code,hit.mkt);}
       }catch(e){console.warn('종목마스터 검색 실패 — KIS 조회로 대체',e);}
     }
-    if(!n){_nameMkt=null;n=await kisName(acc.market,tk);
+    let kErr=null;
+    if(!n){_nameMkt=null;try{n=await kisName(acc.market,tk);}catch(e){kErr=e;}
       if(n&&acc.market==='KRX'&&_nameMkt&&req===_nameReq&&!/\.(KS|KQ)$/i.test(tk))setTickerMkt(code,_nameMkt);}
+    // 미국: KIS에 없으면 Yahoo 종목명 (로그인 시)
+    if(!n&&acc.market!=='KRX'&&useCloudKis()){
+      try{const r=await cloudInvoke({yq:tk});if(r?.ok&&r.name)n=r.name;}catch(e){}
+    }
+    if(!n&&kErr)throw kErr;
     if(req!==_nameReq)return;
     if(n){nmEl.value=n;msg.textContent='';}
     else{msg.style.color='var(--warn)';msg.textContent='종목명을 찾지 못했습니다 — 코드를 확인하거나 직접 입력하세요';}
@@ -869,6 +875,10 @@ async function kisUs(ak,as_,tok,ticker){
       const d=await kisGet(`/uapi/overseas-price/v1/quotations/price?AUTH=&EXCD=${ex}&SYMB=${ticker}`,'HHDFS00000300',ak,as_,tok);
       if(d?.rt_cd==='0'){const p=parseFloat(d.output?.last);if(p>0)return p;}
     }catch(e){}
+  }
+  // KIS에 없는 종목(예: Cboe 상장 신규 ETF) → Yahoo 시세 (로그인 시)
+  if(useCloudKis()){
+    try{const r=await cloudInvoke({yq:ticker});if(r?.ok&&r.price>0){console.info(`${ticker}: KIS에 없음 → Yahoo 시세 ${r.price}`);return r.price;}}catch(e){}
   }
   return null;
 }
