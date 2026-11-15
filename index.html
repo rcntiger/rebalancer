@@ -518,7 +518,15 @@ const ACCENTS=[{n:'블루',h:'#4A90D9'},{n:'그린',h:'#2ECC7A'},{n:'퍼플',h:'
   {n:'오렌지',h:'#E8A020'},{n:'레드',h:'#E85555'},{n:'티파니',h:'#1EC8C8'}];
 const AC=['#4A90D9','#2ECC7A','#E8A020','#C06AF0','#E85555','#00BCD4','#FF6B9D','#8BC34A','#FF9800','#9C27B0'];
 const BROKERS=['한국투자증권','삼성증권','키움증권','미래에셋증권','NH투자증권','나무증권','신한투자증권','KB증권','대신증권','기타'];
-const APP_VERSION='2.22.0';
+const APP_VERSION='2.23.0';
+// ── 정렬은 계좌별로, 표시 열은 기기 공통으로 이 기기에 저장 (rb2_view) ──
+//   {detail:{계좌id:{key,asc}}, dash:{계좌id:{key,asc}}, cols:{...}}
+let _view={detail:{},dash:{}};
+try{_view=Object.assign(_view,JSON.parse(localStorage.getItem('rb2_view')||'{}'));}catch(e){}
+function saveView(){try{localStorage.setItem('rb2_view',JSON.stringify(_view));}catch(e){}}
+function dashSortOf(acc){return _view.dash[acc.id]||{key:'order',asc:true};}
+function rememberDetailSort(acc){if(!acc)return;const sd=S.sortDetail,cur=_view.detail[acc.id];
+  if(!cur||cur.key!==sd.key||cur.asc!==sd.asc){_view.detail[acc.id]={key:sd.key,asc:sd.asc};saveView();}}
 // ── 계좌 안 종목 순서 바꾸기 (저장 순서 = 대시보드 '그래프순'·도넛 순서) ──
 let _stOrd=false;
 function toggleStOrder(){
@@ -639,7 +647,7 @@ let S={
   sortDash:{key:'order',asc:true},   // order = 도넛과 같은 순서(12시부터 시계방향)
   chartRange:'30d',
   chartAccFilter:'all',
-  detailCols:{price:true,avgPrice:true,profitRate:true,ytd:true,div:true,costVal:true,evalVal:true,holdPct:true,qty:true},
+  detailCols:Object.assign({price:true,avgPrice:true,profitRate:true,ytd:true,div:true,costVal:true,evalVal:true,holdPct:true,qty:true},(()=>{try{return JSON.parse(localStorage.getItem('rb2_view')||'{}').cols||{};}catch(e){return{};}})()),
   detailBudget:{mode:false,val:''},
 };
 
@@ -1707,9 +1715,9 @@ function renderDash(){
               <div style="display:flex;gap:4px;margin-bottom:2px">
                 ${(['order','name','tgt','val']).map(k=>{
                   const labels={order:'그래프순',name:'종목명',tgt:'비중',val:'매입금액'};
-                  const active=S.sortDash.key===k;
-                  const arrow=active&&k!=='order'?(S.sortDash.asc?'▲':'▼'):'';
-                  return`<button onclick="event.stopPropagation();setDashSort('${k}')" style="padding:2px 8px;border-radius:10px;font-size:max(10px, calc(13px * var(--fs)));cursor:pointer;font-family:var(--sans);
+                  const dsd=dashSortOf(acc),active=dsd.key===k;
+                  const arrow=active&&k!=='order'?(dsd.asc?'▲':'▼'):'';
+                  return`<button onclick="event.stopPropagation();setDashSort('${k}',${i})" style="padding:2px 8px;border-radius:10px;font-size:max(10px, calc(13px * var(--fs)));cursor:pointer;font-family:var(--sans);
                     background:${active?'color-mix(in srgb,var(--accent) 15%,transparent)':'var(--s2)'};
                     border:1px solid ${active?'var(--accent)':'var(--bd)'};
                     color:${active?'var(--accent)':'var(--t2)'};font-weight:${active?700:500}">${labels[k]} ${arrow}</button>`;
@@ -1717,7 +1725,7 @@ function renderDash(){
               </div>
               ${(()=>{
                 const anyLoaded=acc.stocks.some(s=>s.loaded);
-                const sd=S.sortDash;
+                const sd=dashSortOf(acc);
                 const sorted=[...acc.stocks].sort((a,b)=>{
                   if(sd.key==='order')return acc.stocks.indexOf(a)-acc.stocks.indexOf(b);
                   if(sd.key==='name'){const va=a.name||a.ticker,vb=b.name||b.ticker;return sd.asc?va.localeCompare(vb):vb.localeCompare(va);}
@@ -1872,6 +1880,7 @@ function donutTap(i,k){
 /* ════════════════════════ 계좌 상세 ════════════════════════ */
 function openDetail(idx){
   S.detailIdx=idx;
+  {const acc=S.accounts[idx],sv=acc&&_view.detail[acc.id];S.sortDetail=sv?{key:sv.key,asc:sv.asc}:{key:'name',asc:true};}
   renderDetailContent(idx);
   const panel=document.getElementById('detail-panel');
   // edit/del 버튼 이벤트
@@ -1888,6 +1897,7 @@ function closeDetail(){
 }
 function renderDetailContent(idx){
   const acc=S.accounts[idx];
+  rememberDetailSort(acc);
   const color=AC[acc.ci%5];
   const v=accVal(acc),vk=accKrw(acc);
   const tw=acc.stocks.reduce((s,st)=>s+(isEx(acc,st)?0:st.tgt),0);
@@ -2656,7 +2666,7 @@ function openColSheet(){
         <label style="display:flex;align-items:center;gap:12px;cursor:pointer;padding:10px 12px;
           border-radius:10px;background:var(--s2);border:1px solid var(--bd)">
           <input type="checkbox" id="col-${c.key}" ${dc[c.key]?'checked':''}
-            onchange="S.detailCols['${c.key}']=this.checked;renderDetailContent(S.detailIdx)"
+            onchange="S.detailCols['${c.key}']=this.checked;_view.cols=S.detailCols;saveView();renderDetailContent(S.detailIdx)"
             style="width:18px;height:18px;cursor:pointer;accent-color:var(--accent)">
           <span style="font-size:var(--f-sm);font-weight:500">${c.label}</span>
         </label>`).join('')}
@@ -2671,10 +2681,13 @@ function setRebSort(k){
   else{S.sortReb.key=k;S.sortReb.asc=(k==='name');}
   updateRebResult(); // 계좌 selector 재렌더 불필요, 결과만 갱신
 }
-function setDashSort(k){
-  if(S.sortDash.key===k) S.sortDash.asc=!S.sortDash.asc;
-  else{S.sortDash.key=k;S.sortDash.asc=(k==='name'||k==='order');}
-  if(k==='order')S.sortDash.asc=true;
+function setDashSort(k,i){
+  const acc=S.accounts[i];if(!acc)return;
+  const sd={...dashSortOf(acc)};
+  if(sd.key===k) sd.asc=!sd.asc;
+  else{sd.key=k;sd.asc=(k==='name'||k==='order');}
+  if(k==='order')sd.asc=true;
+  _view.dash[acc.id]=sd;saveView();
   renderDash();
 }
 function renderDetailBudgetResult(idx){
