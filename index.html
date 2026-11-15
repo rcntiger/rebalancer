@@ -518,7 +518,7 @@ const ACCENTS=[{n:'블루',h:'#4A90D9'},{n:'그린',h:'#2ECC7A'},{n:'퍼플',h:'
   {n:'오렌지',h:'#E8A020'},{n:'레드',h:'#E85555'},{n:'티파니',h:'#1EC8C8'}];
 const AC=['#4A90D9','#2ECC7A','#E8A020','#C06AF0','#E85555','#00BCD4','#FF6B9D','#8BC34A','#FF9800','#9C27B0'];
 const BROKERS=['한국투자증권','삼성증권','키움증권','미래에셋증권','NH투자증권','나무증권','신한투자증권','KB증권','대신증권','기타'];
-const APP_VERSION='2.19.0';
+const APP_VERSION='2.20.0';
 // ── 계좌 안 종목 순서 바꾸기 (저장 순서 = 대시보드 '그래프순'·도넛 순서) ──
 let _stOrd=false;
 function toggleStOrder(){
@@ -3306,6 +3306,102 @@ async function cloudPush() {
   localStorage.setItem('rb2_cloud_ts', now);
   localStorage.removeItem('rb2_dirty');
   setCloudState('saved');
+  cloudAutoBackup();
+}
+
+/* ── 클라우드 백업 (rebalancer_backups: 날짜별 사본) ── */
+var BK_TABLE = 'rebalancer_backups', BK_AUTO_KEEP = 30;
+var _bkOpen = false, _bkList = null, _bkErr = '';
+function bkTotal() { return Math.round(S.accounts.reduce((t, a) => t + accKrw(a) + (+a.cash || 0) * (a.market === 'KRX' ? 1 : S.rate), 0)); }
+async function cloudBackup(kind, label) {
+  if (!sb || !_cloudUser) throw new Error('로그인이 필요합니다');
+  const { error } = await sb.from(BK_TABLE).insert({
+    user_id: _cloudUser.id, kind, label: label || null, n_accounts: S.accounts.length, total_krw: bkTotal(),
+    accounts: S.accounts, history: getHistory(),
+  });
+  if (error) throw new Error(/relation|does not exist|schema cache/i.test(error.message) ? '백업 테이블이 없습니다 — SQL을 먼저 실행하세요' : error.message);
+}
+// 하루 한 번 자동 백업 (그날 이미 있으면 건너뜀), 자동 백업은 최근 30개만 보관
+async function cloudAutoBackup() {
+  const today = localDate();
+  if (!sb || !_cloudUser || !S.accounts.length || localStorage.getItem('rb2_bk_day') === today) return;
+  try {
+    const since = new Date(); since.setHours(0, 0, 0, 0);
+    const { data, error } = await sb.from(BK_TABLE).select('id').eq('kind', 'auto').gte('created_at', since.toISOString()).limit(1);
+    if (error) return;   // 테이블이 아직 없으면 조용히 건너뜀
+    if (!data.length) await cloudBackup('auto');
+    localStorage.setItem('rb2_bk_day', today);
+    const { data: old } = await sb.from(BK_TABLE).select('id').eq('kind', 'auto').order('created_at', { ascending: false }).range(BK_AUTO_KEEP, BK_AUTO_KEEP + 50);
+    if (old && old.length) await sb.from(BK_TABLE).delete().in('id', old.map(x => x.id));
+    if (_bkOpen) loadBackups();
+  } catch (e) { console.warn('자동 백업 실패', e); }
+}
+async function loadBackups() {
+  _bkErr = ''; _bkList = null; renderBkList();
+  const { data, error } = await sb.from(BK_TABLE).select('id,created_at,kind,label,n_accounts,total_krw').order('created_at', { ascending: false }).limit(60);
+  if (error) { _bkErr = /relation|does not exist|schema cache/i.test(error.message) ? '백업 테이블이 없습니다 — Supabase SQL Editor에서 rebalancer_backups.sql 을 먼저 실행하세요' : error.message; _bkList = []; }
+  else _bkList = data;
+  renderBkList();
+}
+function toggleBackups() { _bkOpen = !_bkOpen; renderSettingsContent(); if (_bkOpen) loadBackups(); }
+async function backupNow() {
+  const label = (document.getElementById('bk-label')?.value || '').trim().slice(0, 40);
+  const b = document.getElementById('bk-now'); if (b) { b.disabled = true; b.textContent = '백업 중…'; }
+  try { await cloudBackup('manual', label); const l = document.getElementById('bk-label'); if (l) l.value = ''; await loadBackups(); }
+  catch (e) { alert('백업 실패: ' + e.message); }
+  finally { const b2 = document.getElementById('bk-now'); if (b2) { b2.disabled = false; b2.textContent = '지금 백업'; } }
+}
+async function restoreBackup(id) {
+  const it = (_bkList || []).find(x => x.id === id); if (!it) return;
+  if (!confirm(`${fdt(it.created_at)} 백업으로 되돌릴까요?
+
+· 지금 상태는 먼저 '복원 전' 백업으로 남깁니다
+· 다른 기기에도 이 상태로 동기화됩니다`)) return;
+  try {
+    const { data, error } = await sb.from(BK_TABLE).select('accounts,history').eq('id', id).single();
+    if (error) throw error;
+    await cloudBackup('restore', '복원 전 자동 저장');
+    cloudApply({ accounts: data.accounts, history: data.history || {}, updated_at: localStorage.getItem('rb2_cloud_ts') || '' });
+    await cloudPush();
+    await loadBackups();
+    alert('복원했습니다. 시세를 새로 받으려면 ↻ 를 누르세요');
+  } catch (e) { alert('복원 실패: ' + (e.message || e)); }
+}
+async function deleteBackup(id) {
+  if (!confirm('이 백업을 지울까요?')) return;
+  const { error } = await sb.from(BK_TABLE).delete().eq('id', id);
+  if (error) { alert('삭제 실패: ' + error.message); return; }
+  _bkList = (_bkList || []).filter(x => x.id !== id); renderBkList();
+}
+function fdt(iso) { const d = new Date(iso), p = n => String(n).padStart(2, '0'); return `${d.getFullYear()}.${p(d.getMonth() + 1)}.${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`; }
+function renderBkList() {
+  const el = document.getElementById('bk-list'); if (!el) return;
+  if (_bkErr) { el.innerHTML = `<div style="font-size:var(--f-xs);color:var(--warn);line-height:1.5">${esc(_bkErr)}</div>`; return; }
+  if (!_bkList) { el.innerHTML = `<div style="font-size:var(--f-xs);color:var(--t3)">불러오는 중…</div>`; return; }
+  if (!_bkList.length) { el.innerHTML = `<div style="font-size:var(--f-xs);color:var(--t3)">아직 백업이 없습니다</div>`; return; }
+  const tag = { auto: ['자동', 'var(--t3)'], manual: ['수동', 'var(--accent)'], restore: ['복원 전', 'var(--warn)'] };
+  el.innerHTML = _bkList.map(x => {
+    const t = tag[x.kind] || tag.manual;
+    return `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--bd)">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:var(--f-sm);font-family:var(--mono)">${fdt(x.created_at)} <span style="font-family:var(--sans);font-size:max(10px, calc(11px * var(--fs)));color:${t[1]};border:1px solid ${t[1]};border-radius:999px;padding:0 6px">${t[0]}</span></div>
+        <div style="font-size:max(10px, calc(12px * var(--fs)));color:var(--t3)">${x.label ? esc(x.label) + ' · ' : ''}${x.n_accounts ?? '-'}계좌 · ${x.total_krw != null ? fn(Math.round(x.total_krw)) + '원' : '-'}</div>
+      </div>
+      <button onclick="restoreBackup(${x.id})" style="padding:6px 10px;border-radius:8px;border:1px solid var(--accent);background:var(--s2);color:var(--accent);font-size:var(--f-xs);cursor:pointer;white-space:nowrap">복원</button>
+      <button onclick="deleteBackup(${x.id})" title="삭제" style="padding:6px 8px;border-radius:8px;border:1px solid var(--bd);background:var(--s2);color:var(--sell);font-size:var(--f-xs);cursor:pointer">✕</button>
+    </div>`;
+  }).join('');
+}
+function backupBoxHtml() {
+  setTimeout(renderBkList, 0);   // 설정 화면을 다시 그려도 목록 유지
+  return `<div style="margin-top:12px;padding-top:12px;border-top:1px dashed var(--bd)">
+    <div style="font-size:var(--f-xs);color:var(--t2);line-height:1.5;margin-bottom:8px">하루 한 번 자동 백업(최근 ${BK_AUTO_KEEP}개)하고, 필요할 때 직접 백업할 수 있습니다. 복원하면 지금 상태를 먼저 백업해 둡니다.</div>
+    <div style="display:flex;gap:8px;margin-bottom:8px">
+      <input id="bk-label" maxlength="40" placeholder="메모 (선택, 예: 리밸런싱 전)" style="flex:1;min-width:0;padding:9px 11px;border-radius:9px;border:1px solid var(--bd);background:var(--s2);color:var(--t1);font-size:var(--f-sm)">
+      <button id="bk-now" onclick="backupNow()" style="padding:9px 14px;border-radius:9px;cursor:pointer;font-size:var(--f-sm);font-weight:600;border:1px solid var(--accent);background:var(--accent);color:#fff;white-space:nowrap">지금 백업</button>
+    </div>
+    <div id="bk-list" style="max-height:320px;overflow-y:auto"></div>
+  </div>`;
 }
 
 // 서버 데이터 확인 → 서버가 새것이면 받아오고, 이 기기만 바뀌었으면 올림
@@ -3478,7 +3574,8 @@ function cloudBoxHtml() {
     <div style="margin-top:8px"><span onclick="cloudResetCode()" style="font-size:var(--f-xs);color:var(--t3);cursor:pointer;text-decoration:underline">다른 이메일 / 코드 다시 받기</span></div>`);
   return box(`<div style="font-size:var(--f-xs);color:var(--t2)">${clean(_cloudUser.email || '')}</div>
     <div id="cloud-status" style="font-size:var(--f-xs);color:var(--t3);margin:4px 0 10px">${cloudStatusText()}</div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap">${btn('↻ 지금 동기화', 'cloudSyncNow()', false)}${btn('🔑 비밀번호 ' + (localStorage.getItem('rb2_pw_set') ? '변경' : '설정'), 'cloudPwToggle()', false)}${btn('로그아웃', 'cloudLogout()', false)}</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">${btn('↻ 지금 동기화', 'cloudSyncNow()', false)}${btn('🔑 비밀번호 ' + (localStorage.getItem('rb2_pw_set') ? '변경' : '설정'), 'cloudPwToggle()', false)}${btn(_bkOpen ? '🗂 백업 닫기' : '🗂 백업·복원', 'toggleBackups()', false)}${btn('로그아웃', 'cloudLogout()', false)}</div>
+    ${_bkOpen ? backupBoxHtml() : ''}
     ${_pwOpen ? `<div style="margin-top:12px;padding-top:12px;border-top:1px dashed var(--bd);display:flex;flex-direction:column;gap:8px">
       <div style="font-size:var(--f-xs);color:var(--t2);line-height:1.5">비밀번호를 정해 두면 다른 기기(사무실 PC 등)에서 <b>메일 없이</b> 이메일 + 비밀번호로 로그인할 수 있습니다.</div>
       <input type="email" autocomplete="username" value="${clean(_cloudUser.email || '')}" style="display:none">
