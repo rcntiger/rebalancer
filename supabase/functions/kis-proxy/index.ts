@@ -10,7 +10,11 @@
 //   { path: "/uapi/...", query: "A=1&B=2", tr_id }   KIS 시세 조회 → KIS 응답 그대로
 //   { yahoo: "OIL" | "US10Y" }                       → { rt_cd: "0", output: { price } }
 //   { div: "458730.KS" | "JEPQ" }                     → 최근 1년 배당 합계 { ok, ttm, n, cur, last }
+//   { search: "삼성" | "247540" | "애플", market: "KRX" | "US" }
+//                                                    → 종목 검색 { ok, items: [{ code, name, en?, mkt }] }
+//                                                      (KIS 종목마스터 파일, 서버 메모리에 12시간 보관)
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { unzipSync } from "npm:fflate@0.8.2";
 
 const KIS = "https://openapi.koreainvestment.com:9443";
 
@@ -27,6 +31,79 @@ const cors = {
 };
 const json = (o: unknown, status = 200) =>
   new Response(JSON.stringify(o), { status, headers: { ...cors, "Content-Type": "application/json; charset=utf-8" } });
+
+// ── 종목마스터 (KIS 공식 배포 파일) ──
+// 국내: 고정폭 (코드 9 · 표준코드 12 · 한글명 … · 뒤쪽 228/222자는 기타 정보)
+// 해외: 탭 구분 (Symbol=4, 한글명=6, 영문명=7)
+type Item = { code: string; name: string; en?: string; mkt: string };
+const MASTER = "https://new.real.download.dws.co.kr/common/master/";
+const master: Record<string, { at: number; items: Item[] }> = {};
+const loading: Record<string, Promise<Item[]> | undefined> = {};
+
+async function fetchMaster(file: string): Promise<string> {
+  const r = await fetch(MASTER + file, { signal: AbortSignal.timeout(15000) });
+  if (!r.ok) throw new Error(`종목마스터 다운로드 실패 (${r.status})`);
+  const files = unzipSync(new Uint8Array(await r.arrayBuffer()));
+  const data = Object.values(files)[0];
+  return new TextDecoder("euc-kr").decode(data);
+}
+function parseKrx(txt: string, tail: number, mkt: string): Item[] {
+  const out: Item[] = [];
+  for (const line of txt.split(/\r?\n/)) {
+    if (line.length <= tail + 21) continue;
+    const code = line.slice(0, 9).trim();
+    const name = line.slice(21, line.length - tail).trim();
+    if (code && name) out.push({ code, name, mkt });
+  }
+  return out;
+}
+function parseUs(txt: string, mkt: string): Item[] {
+  const out: Item[] = [];
+  for (const line of txt.split(/\r?\n/)) {
+    const c = line.split("\t");
+    if (c.length < 9) continue;
+    const code = c[4]?.trim(), name = c[6]?.trim(), en = c[7]?.trim();
+    if (code && c[8] !== "1") out.push({ code, name: name || en, en, mkt });   // 1 = 지수 제외
+  }
+  return out;
+}
+async function getMaster(market: "KRX" | "US"): Promise<Item[]> {
+  const m = master[market];
+  if (m && Date.now() - m.at < 12 * 3600 * 1000) return m.items;
+  loading[market] ??= (async () => {
+    try {
+      const items = market === "KRX"
+        ? (await Promise.all([
+            fetchMaster("kospi_code.mst.zip").then((t) => parseKrx(t, 227, "KS")),
+            fetchMaster("kosdaq_code.mst.zip").then((t) => parseKrx(t, 221, "KQ")),
+          ])).flat()
+        : (await Promise.all(["nas", "nys", "ams"].map((x) =>
+            fetchMaster(`${x}mst.cod.zip`).then((t) => parseUs(t, x.toUpperCase()))))).flat();
+      if (!items.length) throw new Error("종목마스터가 비어 있음");
+      master[market] = { at: Date.now(), items };
+      return items;
+    } finally { loading[market] = undefined; }
+  })();
+  return loading[market]!;
+}
+function searchItems(items: Item[], q: string): Item[] {
+  const Q = q.toUpperCase().replace(/\s+/g, "");
+  const norm = (s = "") => s.toUpperCase().replace(/\s+/g, "");
+  const scored: [number, Item][] = [];
+  for (const it of items) {
+    const c = it.code.toUpperCase(), n = norm(it.name), e = norm(it.en);
+    let s = -1;
+    if (c === Q) s = 0;
+    else if (n === Q || e === Q) s = 1;
+    else if (n.startsWith(Q)) s = 2;
+    else if (c.startsWith(Q)) s = 3;
+    else if (e.startsWith(Q)) s = 4;
+    else if (n.includes(Q)) s = 5;
+    else if (e.includes(Q)) s = 6;
+    if (s >= 0) scored.push([s * 1000 + Math.min(n.length, 999), it]);
+  }
+  return scored.sort((a, b) => a[0] - b[0]).slice(0, 15).map((x) => x[1]);
+}
 
 // 같은 서버 인스턴스 안에서는 메모리에도 보관
 let memTok = "", memExp = 0;
@@ -105,6 +182,18 @@ Deno.serve(async (req) => {
     }
 
     // ── 배당: Yahoo 최근 1년(365일) 배당 기록 합계 ──
+    // ── 종목 검색 (코드·종목명) ──
+    if (body.search !== undefined) {
+      const q = String(body.search).trim().slice(0, 40);
+      const market = body.market === "US" ? "US" : "KRX";
+      if (!q) return json({ ok: true, items: [] });
+      try {
+        return json({ ok: true, items: searchItems(await getMaster(market), q) });
+      } catch (e) {
+        return json({ ok: false, message: String((e as Error).message ?? e) });
+      }
+    }
+
     if (body.div) {
       const sym = String(body.div).toUpperCase().trim();
       if (!/^[A-Z0-9][A-Z0-9.\-]{0,14}$/.test(sym)) return json({ ok: false, message: "잘못된 종목코드" }, 400);
