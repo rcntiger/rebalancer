@@ -9,6 +9,7 @@
 //   { ping: true }                                   연결·토큰 확인
 //   { path: "/uapi/...", query: "A=1&B=2", tr_id }   KIS 시세 조회 → KIS 응답 그대로
 //   { yahoo: "OIL" | "US10Y" }                       → { rt_cd: "0", output: { price } }
+//   { div: "458730.KS" | "JEPQ" }                     → 최근 1년 배당 합계 { ok, ttm, n, cur, last }
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const KIS = "https://openapi.koreainvestment.com:9443";
@@ -100,6 +101,24 @@ Deno.serve(async (req) => {
       const d: any = await r.json();
       const price = d?.chart?.result?.[0]?.meta?.regularMarketPrice;
       return json(price != null ? { rt_cd: "0", output: { price } } : { rt_cd: "1" });
+    }
+
+    // ── 배당: Yahoo 최근 1년(365일) 배당 기록 합계 ──
+    if (body.div) {
+      const sym = String(body.div).toUpperCase().trim();
+      if (!/^[A-Z0-9][A-Z0-9.\-]{0,14}$/.test(sym)) return json({ ok: false, message: "잘못된 종목코드" }, 400);
+      const r = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?range=2y&interval=1mo&events=div`,
+        { headers: { "User-Agent": "Mozilla/5.0" }, signal: AbortSignal.timeout(8000) });
+      const d: any = await r.json().catch(() => null);
+      const res = d?.chart?.result?.[0];
+      if (!res) return json({ ok: false, message: "배당 정보 없음" });
+      const since = Date.now() / 1000 - 365 * 86400;
+      const divs = Object.values(res.events?.dividends ?? {})
+        .filter((x: any) => x.date >= since && +x.amount > 0)
+        .sort((a: any, b: any) => a.date - b.date) as any[];
+      const ttm = divs.reduce((t, x) => t + Number(x.amount), 0);
+      const last = divs.at(-1);
+      return json({ ok: true, ttm, n: divs.length, cur: res.meta?.currency ?? "", last: last ? { date: last.date, amount: Number(last.amount) } : null });
     }
 
     // ── 연결 확인 ──
