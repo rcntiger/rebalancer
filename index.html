@@ -518,7 +518,7 @@ const ACCENTS=[{n:'블루',h:'#4A90D9'},{n:'그린',h:'#2ECC7A'},{n:'퍼플',h:'
   {n:'오렌지',h:'#E8A020'},{n:'레드',h:'#E85555'},{n:'티파니',h:'#1EC8C8'}];
 const AC=['#4A90D9','#2ECC7A','#E8A020','#C06AF0','#E85555','#00BCD4','#FF6B9D','#8BC34A','#FF9800','#9C27B0'];
 const BROKERS=['한국투자증권','삼성증권','키움증권','미래에셋증권','NH투자증권','나무증권','신한투자증권','KB증권','대신증권','기타'];
-const APP_VERSION='2.23.0';
+const APP_VERSION='2.23.1';
 // ── 정렬은 계좌별로, 표시 열은 기기 공통으로 이 기기에 저장 (rb2_view) ──
 //   {detail:{계좌id:{key,asc}}, dash:{계좌id:{key,asc}}, cols:{...}}
 let _view={detail:{},dash:{}};
@@ -1705,7 +1705,7 @@ function renderDash(){
             <div class="acc-donut" style="flex:0 0 auto;display:flex;justify-content:center;align-items:center;padding:0 8px">
               <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
                 <svg id="donut-${i}" viewBox="0 0 100 100" width="216" height="216" style="overflow:hidden"></svg>
-                <div class="donut-cap" style="font-size:max(10px, calc(12px * var(--fs)));color:var(--t3);text-align:center;line-height:1.3;max-width:216px">${acc.noReb?'보유 비중 · 눌러서 확인':'바깥 목표 · 안쪽 현재 · 눌러서 확인'}</div>
+                <div class="donut-cap" style="font-size:max(10px, calc(12px * var(--fs)));color:var(--t3);text-align:center;line-height:1.3;max-width:216px">${acc.noReb?'보유 비중 · 눌러서 확인':'바깥 목표 · 안쪽 현재 · 숫자는 현재→목표'}</div>
               </div>
             </div>
 
@@ -1746,9 +1746,9 @@ function renderDash(){
                   <div style="width:10px;height:10px;border-radius:50%;background:${baseCol};flex-shrink:0"></div>
                   <div class="lg-name nm2" title="${esc(st.name||st.ticker)}" style="font-size:calc(17px * var(--fs));color:var(--t2);flex:1">${esc(st.name||st.ticker)}</div>
                   <div style="display:flex;align-items:center;gap:4px;flex-shrink:0">
-                    ${acc.noReb?'':isEx(acc,st)?`<span style="font-size:max(10px, calc(12px * var(--fs)));color:var(--t3)">제외</span>`:`<span style="font-size:max(10px, calc(13px * var(--fs)));font-family:DM Mono;color:var(--accent);font-weight:500">${st.tgt}%</span>
-                    <span style="font-size:max(10px, calc(11px * var(--fs)));color:var(--t3)">→</span>`}
-                    <span class="lg-cur" style="font-size:calc(17px * var(--fs));font-family:DM Mono;color:${baseCol};font-weight:700">${anyLoaded?curW.toFixed(1)+'%':'?'}</span>
+                    <span class="lg-cur" title="현재 비중" style="font-size:calc(17px * var(--fs));font-family:DM Mono;color:${baseCol};font-weight:700">${anyLoaded?curW.toFixed(1)+'%':'?'}</span>
+                    ${acc.noReb?'':isEx(acc,st)?`<span style="font-size:max(10px, calc(12px * var(--fs)));color:var(--t3)">· 제외</span>`:`<span style="font-size:max(10px, calc(11px * var(--fs)));color:var(--t3)">→</span>
+                    <span title="목표 비중" style="font-size:max(10px, calc(13px * var(--fs)));font-family:DM Mono;color:var(--accent);font-weight:500">${(+st.tgt||0).toFixed(1)}%</span>`}
                   </div>
                 </div>`;
                 }).join('');
@@ -1869,7 +1869,7 @@ function donutFocus(i,k){
   const nm=full.replace(/^(KODEX|TIGER|KIWOOM|ACE|RISE|SOL|PLUS|HANARO|KBSTAR|ARIRANG|KOSEF|TIMEFOLIO|1Q|BNK|WON|파워|마이티|에셋플러스)\s+/i,'')||full;
   t1.textContent=nm.length>8?nm.slice(0,7)+'…':nm;t1.setAttribute('font-size','5.6');t1.setAttribute('y','48');
   const anyLoaded=acc.stocks.some(s=>s.loaded);
-  t2.textContent=acc.noReb?(anyLoaded?stW(acc,st).toFixed(1)+'%':'-'):isEx(acc,st)?`제외 · ${anyLoaded?stW(acc,st).toFixed(1)+'%':'-'}`:`${st.tgt}%→${anyLoaded?rbW(acc,st).toFixed(1)+'%':'-'}`;
+  t2.textContent=acc.noReb?(anyLoaded?stW(acc,st).toFixed(1)+'%':'-'):isEx(acc,st)?`${anyLoaded?stW(acc,st).toFixed(1)+'%':'-'} · 제외`:`${anyLoaded?rbW(acc,st).toFixed(1)+'%':'-'}→${(+st.tgt||0).toFixed(1)}%`;
   t2.setAttribute('font-size','5.4');t2.setAttribute('fill',stockBaseColor(acc,st));
 }
 function donutTap(i,k){
@@ -2235,7 +2235,7 @@ function renderDetailContent(idx){
             </div>
             <div class="gauge-lbl">
               <span>현재 <b style="color:${curColor}">${isLoaded?cw.toFixed(1)+'%':'?'}</b></span>
-              <span>목표 <b style="color:var(--t1)">${st.tgt}%</b></span>
+              <span>목표 <b style="color:var(--t1)">${(+st.tgt||0).toFixed(1)}%</b></span>
               <span style="color:${curColor};font-weight:700">${isLoaded?(diff>=0?'+':'')+diff.toFixed(1)+'%p':''}</span>
             </div>`;})()}
         </div>
