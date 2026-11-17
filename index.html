@@ -518,7 +518,7 @@ const ACCENTS=[{n:'블루',h:'#4A90D9'},{n:'그린',h:'#2ECC7A'},{n:'퍼플',h:'
   {n:'오렌지',h:'#E8A020'},{n:'레드',h:'#E85555'},{n:'티파니',h:'#1EC8C8'}];
 const AC=['#4A90D9','#2ECC7A','#E8A020','#C06AF0','#E85555','#00BCD4','#FF6B9D','#8BC34A','#FF9800','#9C27B0'];
 const BROKERS=['한국투자증권','삼성증권','키움증권','미래에셋증권','NH투자증권','나무증권','신한투자증권','KB증권','대신증권','기타'];
-const APP_VERSION='2.23.1';
+const APP_VERSION='2.24.0';
 // ── 정렬은 계좌별로, 표시 열은 기기 공통으로 이 기기에 저장 (rb2_view) ──
 //   {detail:{계좌id:{key,asc}}, dash:{계좌id:{key,asc}}, cols:{...}}
 let _view={detail:{},dash:{}};
@@ -3461,6 +3461,42 @@ function autoBoxHtml(){
     <div style="font-size:max(10px, calc(11px * var(--fs)));color:var(--t3);margin-top:8px">지금: 국내 ${o.KRX?'<b style="color:var(--buy)">장중</b>':'장 마감'} · 미국 ${o.US?'<b style="color:var(--buy)">장중</b>':'장 마감'}${S.updated?` · 마지막 갱신 ${Math.round(minsSinceUpd())}분 전`:''}</div>
   </div>`;
 }
+
+/* ── 스마트폰 뒤로 버튼: 열린 화면(상세·설정·시트)을 하나씩 닫기 ──
+   화면이 열릴 때 방문 기록을 하나 쌓고, 뒤로 버튼(popstate)이 오면 맨 위 화면을 닫음.
+   앱 버튼(뒤로·닫기)으로 닫으면 쌓아 둔 기록을 함께 되돌려 기록이 남지 않게 함 */
+const OVERLAYS=['detail-panel','settings-panel','modal-account','modal-stock','modal-theme'];
+let _ovStack=[],_ovSkipPop=0,_ovFromPop=false;
+function closeOverlay(id){
+  if(id==='detail-panel')closeDetail();
+  else if(id==='settings-panel')closeSettings();
+  else document.getElementById(id)?.classList.remove('open');
+}
+function initBackButton(){
+  const isOpen=id=>document.getElementById(id)?.classList.contains('open');
+  const state=Object.fromEntries(OVERLAYS.map(id=>[id,isOpen(id)]));
+  new MutationObserver(()=>{
+    const opened=[],closed=[];
+    for(const id of OVERLAYS){const o=isOpen(id);if(o!==state[id]){(o?opened:closed).push(id);state[id]=o;}}
+    if(!opened.length&&!closed.length)return;
+    closed.forEach(id=>{const k=_ovStack.lastIndexOf(id);if(k>=0)_ovStack.splice(k,1);});
+    opened.forEach(id=>_ovStack.push(id));
+    if(_ovFromPop)return;   // 뒤로 버튼으로 닫힌 경우: 기록은 이미 빠졌음
+    // 닫힌 만큼 기록 되돌리기 — 같은 순간 새 화면이 열렸으면 되돌리는 대신 바꿔치기
+    let back=closed.length,push=opened.length;
+    while(back&&push){history.replaceState({ov:opened[opened.length-push]},'');back--;push--;}
+    for(let k=0;k<push;k++)history.pushState({ov:opened[opened.length-push+k]},'');
+    if(back){_ovSkipPop+=back;history.go(-back);}
+  }).observe(document.body,{subtree:true,attributes:true,attributeFilter:['class']});
+  window.addEventListener('popstate',()=>{
+    if(_ovSkipPop>0){_ovSkipPop--;return;}
+    const id=_ovStack[_ovStack.length-1];if(!id)return;
+    _ovFromPop=true;closeOverlay(id);
+    // MutationObserver는 다음 마이크로태스크에 돌므로 그 뒤에 표시 해제
+    Promise.resolve().then(()=>Promise.resolve()).then(()=>{_ovFromPop=false;});
+  });
+}
+initBackButton();
 
 // refreshPrices 호출 전 프록시 상태 선 확인
 const _doRefreshPrices = refreshPrices;
