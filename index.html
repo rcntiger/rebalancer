@@ -518,7 +518,7 @@ const ACCENTS=[{n:'블루',h:'#4A90D9'},{n:'그린',h:'#2ECC7A'},{n:'퍼플',h:'
   {n:'오렌지',h:'#E8A020'},{n:'레드',h:'#E85555'},{n:'티파니',h:'#1EC8C8'}];
 const AC=['#4A90D9','#2ECC7A','#E8A020','#C06AF0','#E85555','#00BCD4','#FF6B9D','#8BC34A','#FF9800','#9C27B0'];
 const BROKERS=['한국투자증권','삼성증권','키움증권','미래에셋증권','NH투자증권','나무증권','신한투자증권','KB증권','대신증권','기타'];
-const APP_VERSION='2.24.1';
+const APP_VERSION='2.24.2';
 // ── 정렬은 계좌별로, 표시 열은 기기 공통으로 이 기기에 저장 (rb2_view) ──
 //   {detail:{계좌id:{key,asc}}, dash:{계좌id:{key,asc}}, cols:{...}}
 let _view={detail:{},dash:{}};
@@ -1939,7 +1939,7 @@ function renderDetailContent(idx){
         g+=cell('평가수익률 (보유 종목)',pctSpan(pf.evalPct));
         g+=cell('평가손익',pf.evalPL==null?'-':`<span style="color:${plC(pf.evalPL)}">${moneyStr(acc,pf.evalPL,true)}</span>`);
       }
-      if(pf.cash>0)g+=cell('예수금',moneyStr(acc,pf.cash));
+      g+=`<div onclick="openAccSheet(${idx});setTimeout(()=>{const e=document.getElementById('f-ac');e?.focus();e?.select();},150)" style="cursor:pointer" title="눌러서 예수금 수정"><div style="font-size:max(10px, calc(12px * var(--fs)));color:var(--t3)">예수금 <span style="color:var(--accent)">✎</span></div><div style="font-size:var(--f-sm);font-family:var(--mono);font-weight:600">${pf.cash>0?moneyStr(acc,pf.cash):'<span style="color:var(--t3);font-family:var(--sans);font-weight:400">입력</span>'}</div></div>`;
       {const dv=accDiv(acc);if(dv.year!=null){const tot=accVal(acc);
         g+=cell('예상 배당 (세전, 연)',moneyStr(acc,dv.year)+(tot>0?`<span style="font-size:max(10px, calc(11px * var(--fs)));color:var(--t3);font-weight:400"> · ${(dv.year/tot*100).toFixed(2)}%</span>`:''));
         g+=cell('월평균 배당',moneyStr(acc,dv.year/12)+(dv.miss?`<span style="font-size:max(10px, calc(11px * var(--fs)));color:var(--t3);font-weight:400"> · ${dv.miss}종목 정보 없음</span>`:''));}}
@@ -2754,6 +2754,11 @@ function openAccSheet(editIdx){
     <div class="field"><label>계좌 이름</label><input id="f-an" value="${acc?.name??''}" placeholder="예: KRX-배당주"></div>
     <div class="field"><label>증권사</label><select id="f-ab" onchange="brokerSel(this.value)">${brokerList().map(b=>`<option${(acc?.broker??BROKERS[0])===b?' selected':''}>${esc(b)}</option>`).join('')}<option value="__new">＋ 직접 입력…</option></select>
       <div id="f-ab-new" style="display:none;margin-top:6px"><input id="f-ab2" maxlength="20" placeholder="증권사 이름 (예: 토스증권)"></div></div>
+    <div class="field-row">
+      <div class="field"><label>납입원금</label><input id="f-ap" inputmode="decimal" value="${acc?.principal?fn(acc.principal,2).replace(/\.00$/,''):''}" placeholder="지금까지 넣은 돈"></div>
+      <div class="field"><label>예수금</label><input id="f-ac" inputmode="decimal" value="${acc?.cash?fn(acc.cash,2).replace(/\.00$/,''):''}" placeholder="계좌의 현금"></div>
+    </div>
+    <div style="font-size:max(10px, calc(12px * var(--fs)));color:var(--t3);margin:-4px 2px 10px;line-height:1.5">누적수익률 계산용 (선택) · KRX 계좌는 원, US 계좌는 달러($)로 입력</div>
     <label style="display:flex;align-items:flex-start;gap:10px;margin:0 2px 13px;cursor:pointer">
       <input type="checkbox" id="f-atax" ${acc?.taxLimit>0?'checked':''} onchange="document.getElementById('f-atax-box').style.display=this.checked?'block':'none'" style="width:18px;height:18px;margin-top:2px;flex-shrink:0;accent-color:var(--accent)">
       <span><span style="font-size:var(--f-sm);font-weight:600">연금저축·IRP (세액공제 한도 표시)</span><br>
@@ -2771,11 +2776,6 @@ function openAccSheet(editIdx){
       <div class="field"><label>임계값 (%)</label><input id="f-at" type="number" value="${acc?.thr??5}" step="0.5" min="1" max="20"></div>
       <div class="field"><label>메모</label><input id="f-am" value="${acc?.memo??''}" placeholder="선택"></div>
     </div>
-    <div class="field-row">
-      <div class="field"><label>납입원금</label><input id="f-ap" inputmode="decimal" value="${acc?.principal?fn(acc.principal,2).replace(/\.00$/,''):''}" placeholder="지금까지 넣은 돈"></div>
-      <div class="field"><label>예수금</label><input id="f-ac" inputmode="decimal" value="${acc?.cash?fn(acc.cash,2).replace(/\.00$/,''):''}" placeholder="계좌의 현금"></div>
-    </div>
-    <div style="font-size:max(10px, calc(12px * var(--fs)));color:var(--t3);margin:-4px 2px 10px;line-height:1.5">누적수익률 계산용 (선택) · KRX 계좌는 원, US 계좌는 달러($)로 입력</div>
     <div class="sheet-btns">
       <button class="btn-ghost" onclick="closeMBg('modal-account')">취소</button>
       <button class="btn-primary" onclick="saveAcc()">저장</button>
