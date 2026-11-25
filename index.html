@@ -518,7 +518,7 @@ const ACCENTS=[{n:'블루',h:'#4A90D9'},{n:'그린',h:'#2ECC7A'},{n:'퍼플',h:'
   {n:'오렌지',h:'#E8A020'},{n:'레드',h:'#E85555'},{n:'티파니',h:'#1EC8C8'}];
 const AC=['#4A90D9','#2ECC7A','#E8A020','#C06AF0','#E85555','#00BCD4','#FF6B9D','#8BC34A','#FF9800','#9C27B0'];
 const BROKERS=['한국투자증권','삼성증권','키움증권','미래에셋증권','NH투자증권','나무증권','신한투자증권','KB증권','대신증권','기타'];
-const APP_VERSION='2.25.0';
+const APP_VERSION='2.26.0';
 // ── 정렬은 계좌별로, 표시 열은 기기 공통으로 이 기기에 저장 (rb2_view) ──
 //   {detail:{계좌id:{key,asc}}, dash:{계좌id:{key,asc}}, cols:{...}}
 let _view={detail:{},dash:{}};
@@ -942,7 +942,7 @@ let _srchT=0,_srchReq=0;
 function nameInput(){
   clearTimeout(_srchT);
   const box=document.getElementById('f-sn-list'),q=document.getElementById('f-sn').value.trim();
-  if(!useCloudKis()||!q){box.style.display='none';return;}
+  if(!useCloudKis()||!q||document.getElementById('f-sman')?.checked){box.style.display='none';return;}
   _srchT=setTimeout(async()=>{
     const req=++_srchReq,market=S.accounts[_stAccIdx].market;
     box.style.display='block';box.innerHTML='<div class="sn-it" style="color:var(--t3);cursor:default">검색 중…</div>';
@@ -1044,6 +1044,7 @@ async function fetchYtdBases(ak,as_,tok){
   if(today<`${y}-01-05`)return 0;   // 1/2 종가가 확정되기 전(미국은 한국시간 1/3 아침 마감)
   const need=[];
   S.accounts.forEach(acc=>acc.stocks.forEach(st=>{
+    if(st.manual)return;
     if(st.ytd&&st.ytd.y===y)return;
     if(st.ytdTry===today)return;
     need.push({acc,st});
@@ -1123,7 +1124,7 @@ async function refreshPrices(){
     const allStocks=[];
     for(const acc of S.accounts)
       for(const st of acc.stocks)
-        allStocks.push({acc,st});
+        if(!st.manual)allStocks.push({acc,st});   // 직접 입력 종목(펀드 등)은 조회하지 않음
     for(let i=0;i<allStocks.length;i+=5){
       const batch=allStocks.slice(i,i+5);
       await Promise.all(batch.map(async({acc,st})=>{
@@ -1179,16 +1180,16 @@ async function refreshPrices(){
 function accReady(acc){return acc.stocks.length>0&&acc.stocks.every(s=>s.loaded&&s.price>0);}
 function missingTickers(acc){return acc.stocks.filter(s=>!(s.loaded&&s.price>0)).map(s=>s.name||s.ticker);}
 // 매매 주수: 매수는 내림(예산 초과 방지), 매도는 반올림
-function actQty(a){const sh=Math.abs(a.dSh);return a.dLocal<0?Math.round(sh):Math.floor(sh);}
+function actQty(a){if(a.st.manual)return Math.abs(a.dLocal)>=1?1:0;const sh=Math.abs(a.dSh);return a.dLocal<0?Math.round(sh):Math.floor(sh);}
 // 체결 예상 금액(현지통화) = 주수 × 현재가
-function actAmt(a){return actQty(a)*(a.st.price||0);}
+function actAmt(a){return a.st.manual?Math.abs(a.dLocal):actQty(a)*(a.st.price||0);}
 // 유지 판정: 임계값 범위 안 / 금액 미미 / 0주
 function isHold(a){return !!a.hold||Math.abs(a.dKrw)<1000||actQty(a)===0;}
 function actionCellHtml(a,isKrx,sym,unit){
   if(!a||isHold(a)) return`<span class="act-pill hold">✓ 유지</span>`;
   const sell=a.dLocal<0;
   const amt=sym+fn(actAmt(a),isKrx?0:2)+unit;
-  return`<span class="act-pill ${sell?'sell':'buy'}">${sell?'▼ 매도':'▲ 매수'} ${fn(actQty(a))}주</span>
+  return`<span class="act-pill ${sell?'sell':'buy'}">${sell?'▼ 매도':'▲ 매수'}${a.st.manual?' (금액)':' '+fn(actQty(a))+'주'}</span>
     <div class="act-amt" style="color:${sell?'var(--sellc)':'var(--buy)'}">${sell?'−':'+'}${amt}</div>`;
 }
 
@@ -1419,6 +1420,13 @@ function delDeposit(k){
   if(S.detailIdx===_depAcc)renderDetailContent(_depAcc);
   openDepositSheet(_depAcc);
 }
+function riskInfo(acc){   // 위험자산으로 표시한 종목 합계 ÷ (평가금액 + 예수금)
+  if(!acc.stocks.some(st=>st.risky))return null;
+  const risky=acc.stocks.reduce((t,st)=>t+(st.risky?(st.quantity||0)*(st.price||0):0),0);
+  const tot=accVal(acc)+(+acc.cash||0);
+  return tot>0?{pct:risky/tot*100,risky,tot}:null;
+}
+function tickerLabel(st){return st.manual?`직접 입력${st.manualAt?' · '+st.manualAt.slice(5,7)+'/'+st.manualAt.slice(8,10):''}`:st.ticker;}
 function accVal(acc){return acc.stocks.reduce((s,st)=>s+(st.quantity||0)*(st.price||0),0);}
 // 계좌 수익 (계좌 통화 기준: KRX=원, US=$)
 //  평가수익률 = 보유 종목의 (평가 − 매입) ÷ 매입  (매입가 없는 종목 제외)
@@ -1521,7 +1529,7 @@ async function fetchDivs(){
   if(!useCloudKis())return 0;
   const today=localDate(),weekAgo=localDate(new Date(Date.now()-7*86400000));
   const need=[];
-  S.accounts.forEach(acc=>acc.stocks.forEach(st=>{if(!(st.divAuto&&st.divAuto.at>weekAgo))need.push({acc,st});}));
+  S.accounts.forEach(acc=>acc.stocks.forEach(st=>{if(st.manual)return;if(!(st.divAuto&&st.divAuto.at>weekAgo))need.push({acc,st});}));
   let got=0;
   for(let i=0;i<need.length;i+=3){
     await Promise.all(need.slice(i,i+3).map(async({acc,st})=>{
@@ -1948,6 +1956,7 @@ function renderDetailContent(idx){
       {const dv=accDiv(acc);if(dv.year!=null){const tot=accVal(acc);
         g+=cell('예상 배당 (세전, 연)',moneyStr(acc,dv.year)+(tot>0?`<span style="font-size:max(10px, calc(11px * var(--fs)));color:var(--t3);font-weight:400"> · ${(dv.year/tot*100).toFixed(2)}%</span>`:''));
         g+=cell('월평균 배당',moneyStr(acc,dv.year/12)+(dv.miss?`<span style="font-size:max(10px, calc(11px * var(--fs)));color:var(--t3);font-weight:400"> · ${dv.miss}종목 정보 없음</span>`:''));}}
+      {const ri=riskInfo(acc);if(ri)g+=cell('위험자산 비율',`<span style="color:${ri.pct>70?'var(--sell)':'var(--t1)'}">${ri.pct.toFixed(2)}%</span><span style="font-size:max(10px, calc(11px * var(--fs)));color:var(--t3);font-weight:400"> · IRP·DC 한도 70%</span>`);}
       {const yt=accYtd(acc);if(yt.pct!=null)g+=cell('연초대비 (1/2 종가 · 보유 기준)',pctSpan(yt.pct)+(yt.miss?`<span style="font-size:max(10px, calc(11px * var(--fs)));color:var(--t3);font-weight:400"> · ${yt.miss}종목 제외</span>`:''));}
       const notes=[];
       if(!(pf.principal>0))notes.push('수정에서 <b>납입원금·예수금</b>을 입력하면 누적수익률이 표시됩니다');
@@ -2068,7 +2077,7 @@ function renderDetailContent(idx){
         <span style="font-family:var(--mono);color:var(--t3);font-size:var(--f-xs);min-width:1.6em">${i+1}</span>
         <div style="width:10px;height:10px;border-radius:50%;background:${stockBaseColor(acc,st)};flex-shrink:0"></div>
         <div style="flex:1;min-width:0"><div class="nm2" style="font-size:var(--f-sm);font-weight:600">${esc(st.name||st.ticker)}</div>
-          <div style="font-size:max(10px, calc(12px * var(--fs)));color:var(--t3);font-family:var(--mono)">${esc(st.ticker)}</div></div>
+          <div style="font-size:max(10px, calc(12px * var(--fs)));color:var(--t3);font-family:var(--mono)">${esc(tickerLabel(st))}</div></div>
         <button onclick="moveSt(${i},-1)" ${i===0?`disabled style="${ob};opacity:.3"`:`style="${ob}"`} title="위로">▲</button>
         <button onclick="moveSt(${i},1)" ${i===acc.stocks.length-1?`disabled style="${ob};opacity:.3"`:`style="${ob}"`} title="아래로">▼</button>
       </div>`).join('')}</div>
@@ -2192,7 +2201,7 @@ function renderDetailContent(idx){
         <!-- 종목명 -->
         <div class="dt-name" style="flex:1.2;min-width:calc(150px * var(--fs))">
           <div class="nm2" title="${esc(st.name)}" style="font-size:var(--f-md);font-weight:600">${esc(st.name)}</div>
-          <div style="font-size:var(--f-xs);color:var(--t2);font-family:var(--mono)">${st.ticker}</div>
+          <div style="font-size:var(--f-xs);color:var(--t2);font-family:var(--mono)">${esc(tickerLabel(st))}${st.risky?' <span style="font-family:var(--sans);color:var(--warn)">· 위험</span>':''}</div>
           <div style="display:flex;gap:4px;margin-top:4px">
             <div class="act-btn" style="color:var(--accent)" onclick="openStockSheet(${idx},${si})">✎</div>
             <div class="act-btn" style="color:var(--sell)"   onclick="delSt(${idx},${si})">✕</div>
@@ -2215,6 +2224,7 @@ function renderDetailContent(idx){
           if(c.key==='evalVal')  content=`<div style="font-family:var(--mono);font-size:var(--f-xs);font-weight:600;color:var(--t1)">${evalStr}</div>`;
           if(c.key==='holdPct')  content=`<div style="font-family:var(--mono);font-size:var(--f-sm);font-weight:600;color:var(--accent)">${holdStr}</div>`;
           if(c.key==='qty')      content=`<div style="font-family:var(--mono);font-size:var(--f-sm);font-weight:600;color:var(--t1)">${fn(st.quantity||0)}주</div>`;
+          if(st.manual&&(c.key==='price'||c.key==='avgPrice'||c.key==='qty'))content=`<div style="font-size:var(--f-xs);color:var(--t3)">-</div>`;   // 펀드 등: 금액만
           return`<div class="dt-num" style="flex:1;text-align:right;min-width:60px"><div class="dt-lbl">${c.label}</div>${content}</div>`;
         }).join('')}
         <!-- 리밸런싱 -->
@@ -2416,7 +2426,7 @@ function updateRebResult(){
         ${flat
           ?`<div style="color:var(--t3);font-size:var(--f-xs)">${a.hold?'임계값 범위 내':'비중 근접'}</div><div style="font-size:var(--f-xs);color:var(--t3);font-family:var(--mono)">${a.cw.toFixed(1)}% ≈ ${a.tw.toFixed(1)}%</div>`
           :`<div style="font-family:var(--mono);font-size:var(--f-md);font-weight:600;color:${ac}">${buy?'+':'-'}${amt}</div>
-           <div style="font-size:var(--f-sm);color:${ac};font-family:var(--mono)">${fn(actQty(a))}주</div>
+           <div style="font-size:var(--f-sm);color:${ac};font-family:var(--mono)">${a.st.manual?'금액 기준':fn(actQty(a))+'주'}</div>
            <div style="font-size:var(--f-sm);color:var(--t2);font-family:var(--mono)">${a.cw.toFixed(1)}% → ${a.tw.toFixed(1)}%</div>`}
       </div>
     </div>`;
@@ -2846,36 +2856,58 @@ function openStockSheet(accIdx,stIdx){
       <h3 style="margin:0">${isEdit?'종목 수정':'종목 추가'}</h3>
       <span class="mkt-badge ${isKrx?'mkt-krx':'mkt-us'}">${acc.market}</span>
     </div>
-    <div class="field"><label>티커 심볼</label><input id="f-sk" value="${st?.ticker??''}" placeholder="${isKrx?'예: 005930':'예: AAPL'}" onchange="autoName()" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}"></div>
+    <label style="display:flex;align-items:flex-start;gap:10px;margin:0 2px 13px;cursor:pointer">
+      <input type="checkbox" id="f-sman" ${st?.manual?'checked':''} onchange="manualToggle()" style="width:18px;height:18px;margin-top:2px;flex-shrink:0;accent-color:var(--accent)">
+      <span><span style="font-size:var(--f-sm);font-weight:600">시세 직접 입력 (펀드·예금 등)</span><br>
+      <span style="font-size:max(10px, calc(12px * var(--fs)));color:var(--t3);line-height:1.5">종목코드가 없는 상품 — 증권사 앱의 평가금액·매입금액을 그대로 입력</span></span>
+    </label>
+    <div class="field" id="f-sk-box" style="${st?.manual?'display:none':''}"><label>티커 심볼</label><input id="f-sk" value="${st?.ticker??''}" placeholder="${isKrx?'예: 005930':'예: AAPL'}" onchange="autoName()" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}"></div>
     <div class="field"><label>종목명 <span style="font-size:max(10px, calc(11px * var(--fs)));color:var(--t3)">${useCloudKis()?'코드 입력 시 자동 · 이름으로 검색 가능':'코드 입력 시 자동'}</span></label>
       <div style="display:flex;gap:6px;position:relative"><input id="f-sn" style="flex:1;min-width:0" value="${st?.name??''}" placeholder="${useCloudKis()?(isKrx?'코드 또는 종목명으로 검색 (예: 삼성)':'코드 또는 종목명으로 검색 (예: 애플)'):(isKrx?'예: 삼성전자':'예: 애플')}" autocomplete="off" oninput="nameInput()" onblur="setTimeout(()=>{const b=document.getElementById('f-sn-list');if(b)b.style.display='none'},150)">
       <div id="f-sn-list" style="display:none;position:absolute;left:0;right:0;top:100%;margin-top:4px;z-index:50;max-height:260px;overflow-y:auto;background:var(--s1);border:1px solid var(--bd);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.35)"></div>
       <button type="button" onclick="autoName(true)" title="종목명 다시 찾기" style="flex-shrink:0;padding:0 12px;border-radius:9px;border:1px solid var(--bd);background:var(--s2);color:var(--t2);cursor:pointer;font-size:var(--f-sm)">🔍</button></div>
       <div id="f-sn-msg" style="font-size:max(10px, calc(12px * var(--fs)));margin-top:4px;min-height:0"></div>
     </div>
+    <div class="field-row" id="f-man-box" style="${st?.manual?'':'display:none'}">
+      <div class="field"><label>평가금액 ${isKrx?'(원)':'($)'}</label><input id="f-mv" inputmode="decimal" value="${st?.manual?fn(st.price||0,isKrx?0:2):''}" placeholder="예: 1,912,674" oninput="fmtNumIn(this)"></div>
+      <div class="field"><label>매입금액 ${isKrx?'(원)':'($)'}</label><input id="f-mc" inputmode="decimal" value="${st?.manual&&st.avgPrice?fn(st.avgPrice,isKrx?0:2):''}" placeholder="선택 — 수익률 계산" oninput="fmtNumIn(this)"></div>
+    </div>
     <div class="field-row">
-      <div class="field"><label>보유 수량</label><input id="f-sq" type="number" value="${st?.quantity??''}" placeholder="0" step="0.001"></div>
+      <div class="field f-norm" style="${st?.manual?'display:none':''}"><label>보유 수량</label><input id="f-sq" type="number" value="${st?.manual?'':(st?.quantity??'')}" placeholder="0" step="0.001"></div>
       ${acc.noReb?`<input id="f-sw" type="hidden" value="${st?.tgt??0}">`:`<div class="field" id="f-sw-box" style="${st?.noReb?'display:none':''}"><label>목표 비중 (%)</label><input id="f-sw" type="number" value="${st?.tgt??''}" placeholder="0" step="0.1"></div>`}
     </div>
-    <div class="field"><label>매입가 ${isKrx?'(원)':'(USD)'} <span style="font-size:max(10px, calc(11px * var(--fs)));color:var(--t3)">선택 — 수익률 계산에 사용</span></label>
-      <input id="f-savg" type="number" value="${st?.avgPrice??''}" placeholder="${isKrx?'예: 75000':'예: 182.50'}" step="${isKrx?'1':'0.01'}">
+    <div class="field f-norm" style="${st?.manual?'display:none':''}"><label>매입가 ${isKrx?'(원)':'(USD)'} <span style="font-size:max(10px, calc(11px * var(--fs)));color:var(--t3)">선택 — 수익률 계산에 사용</span></label>
+      <input id="f-savg" type="number" value="${st?.manual?'':(st?.avgPrice??'')}" placeholder="${isKrx?'예: 75000':'예: 182.50'}" step="${isKrx?'1':'0.01'}">
     </div>
     ${acc.noReb?'':`<label style="display:flex;align-items:flex-start;gap:10px;margin:0 2px 13px;cursor:pointer">
       <input type="checkbox" id="f-sex" ${st?.noReb?'checked':''} onchange="document.getElementById('f-sw-box').style.display=this.checked?'none':''" style="width:18px;height:18px;margin-top:2px;flex-shrink:0;accent-color:var(--accent)">
       <span><span style="font-size:var(--f-sm);font-weight:600">리밸런싱에서 제외 (보유만)</span><br>
       <span style="font-size:max(10px, calc(12px * var(--fs)));color:var(--t3);line-height:1.5">매매 계산·알림에서 빼고, 나머지 종목은 이 종목을 뺀 금액으로 목표 비중을 맞춥니다</span></span>
     </label>`}
-    <div class="field"><label>주당 연 배당금 ${isKrx?'(원)':'(USD)'} <span style="font-size:max(10px, calc(11px * var(--fs)));color:var(--t3)">선택 — 비우면 자동${st?.divAuto?.ttm>0?` (최근 1년 ${isKrx?fn(Math.round(st.divAuto.ttm))+'원':'$'+fn(st.divAuto.ttm,2)}, ${st.divAuto.n}회)`:''}</span></label>
+    ${accKind(acc)==='irp'?`<label style="display:flex;align-items:flex-start;gap:10px;margin:0 2px 13px;cursor:pointer">
+      <input type="checkbox" id="f-srisk" ${st?.risky?'checked':''} style="width:18px;height:18px;margin-top:2px;flex-shrink:0;accent-color:var(--accent)">
+      <span><span style="font-size:var(--f-sm);font-weight:600">위험자산</span><br>
+      <span style="font-size:max(10px, calc(12px * var(--fs)));color:var(--t3);line-height:1.5">주식형 펀드·ETF 등 — IRP 위험자산 비율(한도 70%) 계산에 넣습니다. 적격 TDF는 안전자산으로 분류돼 체크하지 않습니다</span></span>
+    </label>`:''}
+    <div class="field f-norm" style="${st?.manual?'display:none':''}"><label>주당 연 배당금 ${isKrx?'(원)':'(USD)'} <span style="font-size:max(10px, calc(11px * var(--fs)));color:var(--t3)">선택 — 비우면 자동${st?.divAuto?.ttm>0?` (최근 1년 ${isKrx?fn(Math.round(st.divAuto.ttm))+'원':'$'+fn(st.divAuto.ttm,2)}, ${st.divAuto.n}회)`:''}</span></label>
       <input id="f-sdps" type="number" value="${st?.dps??''}" placeholder="${st?.divAuto?.ttm>0?(isKrx?Math.round(st.divAuto.ttm):st.divAuto.ttm.toFixed(2)):'자동 조회 값이 없으면 입력'}" step="${isKrx?'1':'0.01'}">
     </div>
-    ${isKrx?`<div class="crypto-note">💡 숫자 6자리만 입력 — 코스피·코스닥 자동 구분</div>`:''}
+    ${isKrx?`<div class="crypto-note f-norm" style="${st?.manual?'display:none':''}">💡 숫자 6자리만 입력 — 코스피·코스닥 자동 구분</div>`:''}
     <div class="sheet-btns">
       <button class="btn-ghost" onclick="closeMBg('modal-stock')">취소</button>
       <button class="btn-primary" onclick="saveSt()">저장</button>
     </div>`;
   document.getElementById('modal-stock').classList.add('open');
 }
+function manualToggle(){
+  const on=document.getElementById('f-sman').checked;
+  document.getElementById('f-sk-box').style.display=on?'none':'';
+  document.getElementById('f-man-box').style.display=on?'':'none';
+  document.querySelectorAll('#sheet-stock .f-norm').forEach(e=>e.style.display=on?'none':'');
+  document.getElementById('f-sn-list').style.display='none';
+}
 async function saveSt(){
+  if(document.getElementById('f-sman')?.checked)return saveManualSt();
   const ticker=document.getElementById('f-sk').value.trim().toUpperCase();
   if(ticker&&!document.getElementById('f-sn').value.trim())await autoName(true);   // 비어 있으면 저장 전에 조회
   const name=document.getElementById('f-sn').value.trim()||ticker;
@@ -2894,11 +2926,31 @@ async function saveSt(){
   if(_stIdx>=0){
     const old=acc.stocks[_stIdx];
     if(old.ticker!==tk)delete old.divAuto;   // 종목이 바뀌면 자동 배당 다시 조회
-    Object.assign(old,{ticker:tk,name,quantity:qty,tgt,avgPrice,dps,noReb:exc||undefined});
+    Object.assign(old,{ticker:tk,name,quantity:qty,tgt,avgPrice,dps,noReb:exc||undefined,risky:!!document.getElementById('f-srisk')?.checked||undefined});
     if(!exc)delete old.noReb;
+    if(!old.risky)delete old.risky;
+    if(old.manual){delete old.manual;delete old.manualAt;old.loaded=false;old.price=0;}   // 직접 입력 → 시세 조회로 바뀜
   }else{
-    acc.stocks.push({id:Date.now().toString(),ticker:tk,name,quantity:qty,tgt,avgPrice,dps,price:0,loaded:false,...(exc?{noReb:true}:{})});
+    acc.stocks.push({id:Date.now().toString(),ticker:tk,name,quantity:qty,tgt,avgPrice,dps,price:0,loaded:false,...(exc?{noReb:true}:{}),...(document.getElementById('f-srisk')?.checked?{risky:true}:{})});
   }
+  save();closeMBg('modal-stock');renderDetailContent(_stAccIdx);
+}
+// 직접 입력 종목: 수량 1 × 가격(=평가금액), 매입가(=매입금액) 로 저장 → 기존 계산을 그대로 씀
+function saveManualSt(){
+  const acc=S.accounts[_stAccIdx];
+  const name=document.getElementById('f-sn').value.trim();
+  const mv=numIn('f-mv'),mc=numIn('f-mc');
+  const exc=!!document.getElementById('f-sex')?.checked;
+  let tgt=parseFloat(document.getElementById('f-sw').value);if(isNaN(tgt))tgt=exc||acc.noReb?0:NaN;
+  if(!name){alert('상품 이름을 입력하세요');return;}
+  if(!(mv>=0)||document.getElementById('f-mv').value.trim()===''){alert('평가금액을 입력하세요');return;}
+  if(isNaN(tgt)){alert('목표 비중을 입력하세요');return;}
+  const risky=!!document.getElementById('f-srisk')?.checked;
+  const st=_stIdx>=0?acc.stocks[_stIdx]:null;
+  const data={name,quantity:1,price:mv,avgPrice:mc>0?mc:undefined,loaded:true,manual:true,manualAt:localDate(),tgt,
+    noReb:exc||undefined,risky:risky||undefined,ticker:st?.manual?st.ticker:'M'+Date.now().toString(36).toUpperCase()};
+  if(st){Object.assign(st,data);['noReb','risky','avgPrice'].forEach(k=>{if(st[k]===undefined)delete st[k];});delete st.ytd;delete st.divAuto;delete st.dps;}
+  else acc.stocks.push({id:Date.now().toString(),...data});
   save();closeMBg('modal-stock');renderDetailContent(_stAccIdx);
 }
 function delSt(accIdx,stIdx){
