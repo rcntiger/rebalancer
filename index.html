@@ -518,7 +518,7 @@ const ACCENTS=[{n:'블루',h:'#4A90D9'},{n:'그린',h:'#2ECC7A'},{n:'퍼플',h:'
   {n:'오렌지',h:'#E8A020'},{n:'레드',h:'#E85555'},{n:'티파니',h:'#1EC8C8'}];
 const AC=['#4A90D9','#2ECC7A','#E8A020','#C06AF0','#E85555','#00BCD4','#FF6B9D','#8BC34A','#FF9800','#9C27B0'];
 const BROKERS=['한국투자증권','삼성증권','키움증권','미래에셋증권','NH투자증권','나무증권','신한투자증권','KB증권','대신증권','기타'];
-const APP_VERSION='2.26.0';
+const APP_VERSION='2.27.0';
 // ── 정렬은 계좌별로, 표시 열은 기기 공통으로 이 기기에 저장 (rb2_view) ──
 //   {detail:{계좌id:{key,asc}}, dash:{계좌id:{key,asc}}, cols:{...}}
 let _view={detail:{},dash:{}};
@@ -673,6 +673,17 @@ function save(){
   localStorage.setItem('rb2_rate',S.rate);
   if(S.updated)localStorage.setItem('rb2_upd',S.updated);
   cloudMarkDirty();
+  clearTimeout(save._snapT);save._snapT=setTimeout(autoSnapshot,1200);
+}
+// 계좌·종목·예수금을 고치면 오늘 기록도 새로 저장 → 캐시플로우·연금관리가 열릴 때 자동 반영
+// (시세가 모두 있는 경우에만 — 빠진 종목이 있으면 합계가 틀어지므로 건너뜀)
+function autoSnapshot(){
+  if(!S.accounts.length||S.loading)return;
+  if(!S.accounts.every(a=>a.stocks.every(st=>st.loaded&&st.price>0)))return;
+  const before=JSON.stringify(getHistory()[localDate()]||null);
+  saveSnapshot();
+  if(JSON.stringify(getHistory()[localDate()])===before)return;   // 바뀐 것 없음
+  console.info('오늘 자산 기록 갱신 (계좌 수정 반영)');
 }
 function load(){
   try{
@@ -2441,8 +2452,9 @@ function saveSnapshot(){
   const today=localDate();
   let hist={};
   try{hist=JSON.parse(localStorage.getItem('rb2_history')||'{}');}catch(e){}
-  const snap={total:S.accounts.reduce((s,a)=>s+accKrw(a),0),rate:S.rate,accounts:{}};
-  S.accounts.forEach(a=>{snap.accounts[a.name]={value:accKrw(a),market:a.market,kind:accKind(a),...(a.market==='KRX'&&a.principal?{principal:a.principal}:{})};});
+  const cashKrw=a=>(+a.cash||0)*(a.market==='KRX'?1:S.rate);
+  const snap={total:S.accounts.reduce((s,a)=>s+accKrw(a)+cashKrw(a),0),rate:S.rate,accounts:{}};
+  S.accounts.forEach(a=>{snap.accounts[a.name]={value:accKrw(a)+cashKrw(a),cash:cashKrw(a),market:a.market,kind:accKind(a),...(a.market==='KRX'&&a.principal?{principal:a.principal}:{})};});
   hist[today]=snap;
   // 최대 730일(2년) 보관
   const keys=Object.keys(hist).sort();
