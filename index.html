@@ -518,7 +518,7 @@ const ACCENTS=[{n:'블루',h:'#4A90D9'},{n:'그린',h:'#2ECC7A'},{n:'퍼플',h:'
   {n:'오렌지',h:'#E8A020'},{n:'레드',h:'#E85555'},{n:'티파니',h:'#1EC8C8'}];
 const AC=['#4A90D9','#2ECC7A','#E8A020','#C06AF0','#E85555','#00BCD4','#FF6B9D','#8BC34A','#FF9800','#9C27B0'];
 const BROKERS=['한국투자증권','삼성증권','키움증권','미래에셋증권','NH투자증권','나무증권','신한투자증권','KB증권','대신증권','기타'];
-const APP_VERSION='2.27.0';
+const APP_VERSION='2.28.0';
 // ── 정렬은 계좌별로, 표시 열은 기기 공통으로 이 기기에 저장 (rb2_view) ──
 //   {detail:{계좌id:{key,asc}}, dash:{계좌id:{key,asc}}, cols:{...}}
 let _view={detail:{},dash:{}};
@@ -668,6 +668,8 @@ function sanitizeAccounts(arr){
   return arr;
 }
 function save(){
+  // 직접 고친 내용 표시 (시세 갱신 중 저장·서버 데이터 적용은 제외) — 다른 기기와 충돌할 때 물어볼지 정하는 데 씀
+  if(!S.loading&&!_cloudApplying){try{localStorage.setItem('rb2_edit','1');}catch(e){}}
   sanitizeAccounts(S.accounts);
   localStorage.setItem('rb2_accs',JSON.stringify(S.accounts));
   localStorage.setItem('rb2_rate',S.rate);
@@ -3516,6 +3518,8 @@ async function autoRefresh(kind){
   if(kind==='open'&&!S.autoOpen)return;
   if(kind==='mkt'){if(!S.autoMkt)return;const o=marketOpenNow();if(!S.accounts.some(a=>a.stocks.length&&o[a.market]))return;}
   console.info('자동 시세 갱신:',kind==='open'?'열 때':'장중');
+  // 화면을 켜둔 채 오래 둔 창이 예전 데이터로 시세만 갱신해 올리지 않도록, 먼저 서버 것을 받음
+  if(_cloudUser){try{await cloudPull();}catch(e){}}
   try{await refreshPrices();}catch(e){console.warn('자동 갱신 실패',e);}
 }
 setInterval(()=>autoRefresh('mkt'),60000);
@@ -3621,10 +3625,26 @@ function cloudMarkDirty() {
   _cloudTimer = setTimeout(cloudPush, 2000);
 }
 
+// 서버에 올리기 — 올리기 전에 서버가 다른 기기에서 바뀌었는지 확인해서 덮어쓰지 않음
+var _pushBusy = false;
 async function cloudPush() {
   if (!sb || !_cloudUser) return;
+  if (_pushBusy) { clearTimeout(_cloudTimer); _cloudTimer = setTimeout(cloudPush, 1500); return; }
   clearTimeout(_cloudTimer); _cloudTimer = null;
-  setCloudState('saving');
+  _pushBusy = true;
+  try {
+    setCloudState('saving');
+    const lastSynced = localStorage.getItem('rb2_cloud_ts') || '';
+    const cur = await sb.from(SB_TABLE).select('updated_at').eq('user_id', _cloudUser.id).maybeSingle();
+    if (cur.error) { setCloudState('error', cur.error.message); return; }
+    if (cur.data && cur.data.updated_at !== lastSynced) {        // 다른 기기가 그사이 저장함
+      const r = await cloudResolve();
+      if (r !== 'push') return;
+    }
+    await cloudUpsert();
+  } finally { _pushBusy = false; }
+}
+async function cloudUpsert() {
   const now = new Date().toISOString();
   const { error } = await sb.from(SB_TABLE).upsert({
     user_id: _cloudUser.id, accounts: S.accounts, history: getHistory(), updated_at: now,
@@ -3632,8 +3652,29 @@ async function cloudPush() {
   if (error) { setCloudState('error', error.message); return; }
   localStorage.setItem('rb2_cloud_ts', now);
   localStorage.removeItem('rb2_dirty');
+  localStorage.removeItem('rb2_edit');
   setCloudState('saved');
   cloudAutoBackup();
+}
+// 서버가 다른 기기에서 바뀌었을 때: 시세만 바뀐 기기면 조용히 서버 것을 받고,
+// 이 기기에서 직접 고친 게 있으면 물어봄. 어느 쪽을 고르든 버려지는 쪽은 클라우드 백업으로 남김.
+// 반환: 'push' = 이 기기 데이터로 올려야 함, 'applied' = 서버 데이터를 받음, '' = 실패
+async function cloudResolve(data) {
+  if (!data) {
+    const r = await sb.from(SB_TABLE).select('accounts,history,updated_at').eq('user_id', _cloudUser.id).maybeSingle();
+    if (r.error || !r.data) { if (r.error) setCloudState('error', r.error.message); return r.error ? '' : 'push'; }
+    data = r.data;
+  }
+  const edited = localStorage.getItem('rb2_edit') === '1';
+  if (!edited) { cloudApply(data); console.info('다른 기기에서 저장한 데이터를 받았습니다'); return 'applied'; }
+  const when = new Date(data.updated_at).toLocaleString('ko-KR');
+  const useServer = confirm(`다른 기기에서 ${when}에 저장한 데이터가 있습니다.\n\n[확인] 그 데이터 받기 — 이 기기에서 고친 내용은 클라우드 백업으로 남김\n[취소] 이 기기 데이터로 올리기 — 서버 데이터는 클라우드 백업으로 남김`);
+  if (useServer) {
+    try { await cloudBackup('restore', '충돌: 이 기기 데이터'); } catch (e) { console.warn('백업 실패', e); }
+    cloudApply(data); return 'applied';
+  }
+  try { await cloudBackupData(data.accounts || [], data.history || {}, '충돌: 서버 데이터'); } catch (e) { console.warn('백업 실패', e); }
+  return 'push';
 }
 
 /* ── 클라우드 백업 (rebalancer_backups: 날짜별 사본) ── */
@@ -3647,6 +3688,11 @@ async function cloudBackup(kind, label) {
     accounts: S.accounts, history: getHistory(),
   });
   if (error) throw new Error(/relation|does not exist|schema cache/i.test(error.message) ? '백업 테이블이 없습니다 — SQL을 먼저 실행하세요' : error.message);
+}
+async function cloudBackupData(accounts, history, label) {
+  const total = Math.round((accounts || []).reduce((t, a) => t + (a.stocks || []).reduce((u, st) => u + (st.quantity || 0) * (st.price || 0), 0) * (a.market === 'KRX' ? 1 : S.rate) + (+a.cash || 0) * (a.market === 'KRX' ? 1 : S.rate), 0));
+  const { error } = await sb.from(BK_TABLE).insert({ user_id: _cloudUser.id, kind: 'restore', label, n_accounts: (accounts || []).length, total_krw: total, accounts, history });
+  if (error) throw new Error(error.message);
 }
 // 하루 한 번 자동 백업 (그날 이미 있으면 건너뜀), 자동 백업은 최근 30개만 보관
 async function cloudAutoBackup() {
@@ -3749,15 +3795,12 @@ async function cloudPull() {
       return;
     }
     if (data.updated_at === lastSynced) {           // 서버는 그대로
-      if (dirty) await cloudPush(); else setCloudState('saved');
+      if (dirty) { _cloudBusy = false; await cloudPush(); } else setCloudState('saved');
       return;
     }
-    // 서버가 다른 기기에서 바뀜
-    if (dirty && !confirm('이 기기에 서버와 다른 데이터가 있습니다.\n\n[확인] 서버 데이터로 바꾸기\n[취소] 이 기기 데이터를 서버에 올리기')) {
-      await cloudPush();
-      return;
-    }
-    cloudApply(data);
+    // 서버가 다른 기기에서 바뀜 → 직접 고친 게 없으면 서버 것, 있으면 물어봄 (버려지는 쪽은 백업)
+    if (!dirty) { cloudApply(data); return; }
+    if (await cloudResolve(data) === 'push') await cloudUpsert();
   } finally { _cloudBusy = false; }
 }
 
@@ -3770,6 +3813,7 @@ function cloudApply(data) {
   } finally { _cloudApplying = false; }
   localStorage.setItem('rb2_cloud_ts', data.updated_at);
   localStorage.removeItem('rb2_dirty');
+  localStorage.removeItem('rb2_edit');
   if (S.selAcc >= S.accounts.length) S.selAcc = 0;
   if (S.detailIdx >= 0) { if (S.detailIdx < S.accounts.length) renderDetailContent(S.detailIdx); else closeDetail(); }
   render();
