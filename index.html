@@ -518,7 +518,7 @@ const ACCENTS=[{n:'블루',h:'#4A90D9'},{n:'그린',h:'#2ECC7A'},{n:'퍼플',h:'
   {n:'오렌지',h:'#E8A020'},{n:'레드',h:'#E85555'},{n:'티파니',h:'#1EC8C8'}];
 const AC=['#4A90D9','#2ECC7A','#E8A020','#C06AF0','#E85555','#00BCD4','#FF6B9D','#8BC34A','#FF9800','#9C27B0'];
 const BROKERS=['한국투자증권','삼성증권','키움증권','미래에셋증권','NH투자증권','나무증권','신한투자증권','KB증권','대신증권','기타'];
-const APP_VERSION='2.28.0';
+const APP_VERSION='2.29.0';
 // ── 정렬은 계좌별로, 표시 열은 기기 공통으로 이 기기에 저장 (rb2_view) ──
 //   {detail:{계좌id:{key,asc}}, dash:{계좌id:{key,asc}}, cols:{...}}
 let _view={detail:{},dash:{}};
@@ -592,6 +592,26 @@ function moveAcc(i,d){
 const ACC_KINDS={'':'일반',pension:'연금저축',irp:'IRP',isa:'ISA'};
 function kindGuess(name,taxLimit){const n=String(name||'');return /IRP|퇴직|DC/i.test(n)?'irp':/ISA/i.test(n)?'isa':(/연금/.test(n)||taxLimit>0)?'pension':'';}
 function accKind(a){return a.kind!=null?a.kind:kindGuess(a.name,a.taxLimit);}
+// 명의 — 한 계정에서 부부 계좌를 함께 관리할 때 구분. 값: ''(본인) | 'spouse'(배우자). 이름은 이 기기 설정
+function ownerNames(){try{const o=JSON.parse(localStorage.getItem('rb2_owners')||'{}');return{self:o.self||'본인',spouse:o.spouse||'배우자'};}catch(e){return{self:'본인',spouse:'배우자'};}}
+function setOwnerName(k,v){const o=ownerNames();o[k]=String(v||'').trim().slice(0,10)||(k==='self'?'본인':'배우자');try{localStorage.setItem('rb2_owners',JSON.stringify(o));}catch(e){}render();}
+function ownerGuess(name){const sp=ownerNames().spouse;return(sp&&sp!=='배우자'&&String(name||'').includes(sp))||/아내|배우자|남편/.test(String(name||''))?'spouse':'';}
+function ownerOf(a){return a.owner==='spouse'?'spouse':'';}
+function ownerTag(a){return a.owner==='spouse'?' · '+esc(ownerNames().spouse):'';}
+// 기록에 넘길 계좌 이름: 이름이 겹치면 뒤 계좌에 명의·시장을 붙여 구분 (먼저 나온 계좌 이름은 그대로 → 기존 연결 유지)
+function snapKeys(){
+  const seen=new Set(),first={},out=[];
+  S.accounts.forEach(a=>{
+    let k=a.name;
+    if(!first[a.name])first[a.name]=a;
+    if(seen.has(k)){const on=ownerNames(),f=first[a.name],own=a.owner==='spouse'?on.spouse:on.self;
+      const tries=(ownerOf(f)!==ownerOf(a)?[own,a.market]:[a.market,own]).concat([a.broker]).filter(Boolean);
+      for(const t of tries){const c=`${a.name} (${t})`;if(!seen.has(c)){k=c;break;}}
+      let i=2;while(seen.has(k))k=`${a.name} (${i++})`;}
+    seen.add(k);out.push(k);
+  });
+  return out;
+}
 function brokerList(){
   const base=BROKERS.filter(b=>b!=='기타');
   const used=[...new Set(S.accounts.map(a=>a.broker).filter(b=>b&&!BROKERS.includes(b)))];
@@ -663,6 +683,7 @@ function sanitizeAccounts(arr){
     ['name','broker','memo'].forEach(k=>{if(a[k]!=null)a[k]=clean(a[k]);});
     ['principal','cash'].forEach(k=>{if(a[k]!=null)a[k]=Math.max(0,+a[k]||0);});
     if(a.kind!=null&&!['','pension','irp','isa'].includes(a.kind))delete a.kind;
+    if(a.owner!=null&&a.owner!=='spouse')delete a.owner;
     (a.stocks||[]).forEach(st=>{['name','ticker'].forEach(k=>{if(st[k]!=null)st[k]=clean(st[k]);});});
   });
   return arr;
@@ -1665,7 +1686,7 @@ function renderDash(){
           <span style="font-family:var(--mono);color:var(--t3);font-size:var(--f-xs);min-width:1.6em">${i+1}</span>
           <div class="acc-dot" style="background:${AC[acc.ci%5]}"></div>
           <div style="flex:1;min-width:0"><div class="acc-name nm2" style="margin:0;padding:0">${esc(acc.name)}</div>
-            <div style="font-size:max(10px, calc(12px * var(--fs)));color:var(--t3)">${esc(acc.broker)} · ${acc.market}</div></div>
+            <div style="font-size:max(10px, calc(12px * var(--fs)));color:var(--t3)">${esc(acc.broker)} · ${acc.market}${ownerTag(acc)}</div></div>
           <button onclick="moveAcc(${i},-1)" ${i===0?'disabled style="'+ob+';opacity:.3"':`style="${ob}"`} title="위로">▲</button>
           <button onclick="moveAcc(${i},1)" ${i===S.accounts.length-1?'disabled style="'+ob+';opacity:.3"':`style="${ob}"`} title="아래로">▼</button>
         </div>`).join('')}</div>
@@ -1947,7 +1968,7 @@ function renderDetailContent(idx){
 
   let h=`
   <div class="detail-header" style="background:linear-gradient(135deg,${color}1F,var(--s1) 65%);border:1px solid ${color}40">
-    <div style="font-size:var(--f-xs);color:var(--t2)">${esc(acc.broker)} · ${acc.market}</div>
+    <div style="font-size:var(--f-xs);color:var(--t2)">${esc(acc.broker)} · ${acc.market}${ownerTag(acc)}</div>
     <div style="font-family:var(--mono);font-size:var(--f-2xl);font-weight:500;margin:4px 0">${acc.market==='KRX'?fn(v)+'원':'$'+fn(v,2)}</div>
     ${acc.market==='US'&&vk?`<div style="font-size:var(--f-xs);color:var(--t2)">≈ ${fn(vk)}원</div>`:''}
     ${acc.memo?`<div style="font-size:var(--f-xs);color:var(--t3);margin-top:5px">${acc.memo}</div>`:''}
@@ -2456,7 +2477,8 @@ function saveSnapshot(){
   try{hist=JSON.parse(localStorage.getItem('rb2_history')||'{}');}catch(e){}
   const cashKrw=a=>(+a.cash||0)*(a.market==='KRX'?1:S.rate);
   const snap={total:S.accounts.reduce((s,a)=>s+accKrw(a)+cashKrw(a),0),rate:S.rate,accounts:{}};
-  S.accounts.forEach(a=>{snap.accounts[a.name]={value:accKrw(a)+cashKrw(a),cash:cashKrw(a),market:a.market,kind:accKind(a),...(a.market==='KRX'&&a.principal?{principal:a.principal}:{})};});
+  const snapK=snapKeys();
+  S.accounts.forEach((a,i)=>{snap.accounts[snapK[i]]={id:a.id,name:a.name,owner:ownerOf(a),value:accKrw(a)+cashKrw(a),cash:cashKrw(a),market:a.market,kind:accKind(a),...(a.market==='KRX'&&a.principal?{principal:a.principal}:{})};});
   hist[today]=snap;
   // 최대 730일(2년) 보관
   const keys=Object.keys(hist).sort();
@@ -2593,7 +2615,7 @@ function renderChart(){
       <div style="width:10px;height:10px;border-radius:50%;background:${c};flex-shrink:0"></div>
       <div style="flex:1">
         <div style="font-size:calc(17px * var(--fs))">${a.name}</div>
-        <div style="font-size:calc(15px * var(--fs));color:var(--t3)">${esc(a.broker)} · ${a.market}</div>
+        <div style="font-size:calc(15px * var(--fs));color:var(--t3)">${esc(a.broker)} · ${a.market}${ownerTag(a)}</div>
       </div>
       <div style="font-family:var(--mono);font-size:var(--f-sm);font-weight:600;color:${c}">${displayVal>0?fn(displayVal)+'원':'-'}</div>
       ${S.chartAccFilter===a.name?`<div style="color:var(--accent);font-size:max(10px, calc(11px * var(--fs)))">◀</div>`:''}
@@ -2780,7 +2802,8 @@ function openAccSheet(editIdx){
         <div class="mkt-btn${(acc?.market??'KRX')==='US'?' active':''}" id="mb-us" onclick="selMkt('US')">🇺🇸 US</div>
       </div>
     </div>
-    <div class="field"><label>계좌 이름</label><input id="f-an" value="${acc?.name??''}" placeholder="예: KRX-배당주" oninput="const k=document.getElementById('f-akind');if(!k.dataset.touched)k.value=kindGuess(this.value)"></div>
+    <div class="field"><label>계좌 이름</label><input id="f-an" value="${acc?.name??''}" placeholder="예: KRX-배당주" oninput="const k=document.getElementById('f-akind');if(!k.dataset.touched)k.value=kindGuess(this.value);const o=document.getElementById('f-aown');if(o&&!o.dataset.touched)o.value=ownerGuess(this.value)"></div>
+    <div class="field"><label>명의</label><select id="f-aown" onchange="this.dataset.touched=1">${(()=>{const on=ownerNames(),cur=acc?ownerOf(acc):'';return`<option value=""${cur===''?' selected':''}>${esc(on.self)}</option><option value="spouse"${cur==='spouse'?' selected':''}>${esc(on.spouse)}</option>`;})()}</select></div>
     <div class="field"><label>계좌 종류</label><select id="f-akind" onchange="this.dataset.touched=1">${Object.entries(ACC_KINDS).map(([k,l])=>`<option value="${k}"${(acc?accKind(acc):'')===k?' selected':''}>${l}</option>`).join('')}</select></div>
     <div class="field"><label>증권사</label><select id="f-ab" onchange="brokerSel(this.value)">${brokerList().map(b=>`<option${(acc?.broker??BROKERS[0])===b?' selected':''}>${esc(b)}</option>`).join('')}<option value="__new">＋ 직접 입력…</option></select>
       <div id="f-ab-new" style="display:none;margin-top:6px"><input id="f-ab2" maxlength="20" placeholder="증권사 이름 (예: 토스증권)"></div></div>
@@ -2838,13 +2861,15 @@ function saveAcc(){
   const noReb=!document.getElementById('f-areb').checked||undefined;
   const taxLimit=document.getElementById('f-atax').checked?(numIn('f-atax-l')||6000000):undefined;
   const kind=document.getElementById('f-akind').value;
+  const owner=document.getElementById('f-aown')?.value==='spouse'?'spouse':undefined;
+  if(S.accounts.some((x,i)=>x.name===name&&i!==_editAccIdx)&&!confirm(`'${name}' 이름의 계좌가 이미 있습니다.\n그대로 저장하면 캐시플로우에는 '${name} (명의/시장)'처럼 구분해서 넘깁니다.\n계속할까요?`))return;
   if(_editAccIdx!==undefined){
     const a=S.accounts[_editAccIdx];
-    Object.assign(a,{name,market:window._mkt,broker,thr,memo,principal,cash,ci:window._ci,noReb,taxLimit,kind});
+    Object.assign(a,{name,market:window._mkt,broker,thr,memo,principal,cash,ci:window._ci,noReb,taxLimit,kind,owner});if(!owner)delete a.owner;
     if(!noReb)delete a.noReb;
     if(!taxLimit)delete a.taxLimit;
   }else{
-    S.accounts.push({id:Date.now().toString(),name,market:window._mkt,broker,thr,memo,principal,cash,kind,ci:window._ci,stocks:[],...(noReb?{noReb}:{}),...(taxLimit?{taxLimit}:{})});
+    S.accounts.push({id:Date.now().toString(),name,market:window._mkt,broker,thr,memo,principal,cash,kind,...(owner?{owner}:{}),ci:window._ci,stocks:[],...(noReb?{noReb}:{}),...(taxLimit?{taxLimit}:{})});
   }
   save();closeMBg('modal-account');
   if(getHistory()[localDate()])saveSnapshot();   // 오늘 기록에 계좌 종류 바로 반영
@@ -3112,6 +3137,11 @@ function renderSettingsContent(){
     ${installBoxHtml()}
     ${cloudBoxHtml()}
     ${autoBoxHtml()}
+    ${(()=>{const on=ownerNames();return`<div style="margin:14px 12px 0;padding:12px 14px;border:1px solid var(--bd);border-radius:10px;background:var(--s1)">
+      <div style="font-size:var(--f-sm);font-weight:600;margin-bottom:6px">👥 명의 이름</div>
+      <div style="font-size:var(--f-xs);color:var(--t3);line-height:1.5;margin-bottom:8px">한 계정에서 부부 계좌를 함께 관리할 때 계좌마다 명의를 고릅니다. 캐시플로우·연금관리 앱이 이 명의로 계좌 주인을 정합니다.</div>
+      <div style="display:flex;gap:8px"><input value="${esc(on.self)}" onchange="setOwnerName('self',this.value)" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--bd);background:var(--s2);color:var(--t1)" aria-label="본인 이름">
+      <input value="${esc(on.spouse)}" onchange="setOwnerName('spouse',this.value)" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--bd);background:var(--s2);color:var(--t1)" aria-label="배우자 이름"></div></div>`;})()}
     ${useCloudKis()?`<div class="status-banner banner-saved"><div style="line-height:1.5">☁ 로그인 상태에서는 <b>서버에 등록된 KIS 키</b>로 시세를 조회합니다. 이 기기에 키를 넣을 필요가 없습니다.</div></div>
     <div id="test-result-cloud"></div>
     <div class="btn-row" style="margin-top:4px"><button class="btn-outline" style="flex:1" onclick="testConn()">☁ 클라우드 연결 테스트</button></div>
